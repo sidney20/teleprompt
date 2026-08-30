@@ -1407,6 +1407,12 @@ body { min-height: 100dvh; }
     $('btn-next').style.display = hasNext ? '' : 'none';
   }
 
+  function closeRecModal() {
+    $('rec-modal').classList.remove('visible');
+    var preview = $('rec-preview');
+    try { preview.pause(); } catch (e) {}
+  }
+
   $('btn-record').addEventListener('click', function () {
     if (!state.recording) startRecording();
     else stopRecording();
@@ -1421,25 +1427,27 @@ body { min-height: 100dvh; }
     document.body.appendChild(a);
     a.click();
     a.remove();
-    if ($('rec-modal').classList.contains('visible')) setTimeout(function () { $('rec-modal').classList.remove('visible'); }, 400);
+    if ($('rec-modal').classList.contains('visible')) setTimeout(closeRecModal, 400);
   });
 
   $('btn-rerecord').addEventListener('click', function () {
-    $('rec-modal').classList.remove('visible');
+    closeRecModal();
   });
 
   $('btn-next').addEventListener('click', function () {
-    $('rec-modal').classList.remove('visible');
+    closeRecModal();
     if (state.idx < state.doc.length - 1) openReader(state.idx + 1);
     else toast('Esse é o último roteiro');
   });
 
   $('btn-rec-close').addEventListener('click', function () {
-    $('rec-modal').classList.remove('visible');
+    closeRecModal();
     backToScripts();
   });
 
-  $('rec-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
+  $('rec-modal').addEventListener('click', function (e) {
+    if (e.target === this) closeRecModal();
+  });
 
   function backToScripts() {
     if (state.recording) stopRecording();
