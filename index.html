@@ -421,7 +421,7 @@ body { min-height: 100dvh; }
       </div>
       <div class="rec-row">
         <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
-        <div class="rec-info" id="rec-info">Filtro de voz ativo por padrão: ruído de fundo reduzido para focar na sua voz. Toque em &quot;Rolar&quot; para iniciar o texto.</div>
+        <div class="rec-info" id="rec-info">Isolamento de voz ativo: todo o barulho de fora é removido e entra apenas a sua voz. Toque em &quot;Rolar&quot; para iniciar o texto.</div>
       </div>
       <div class="play-hint">Toque em &quot;Rolar&quot; para iniciar o texto e grave quando estiver pronto.</div>
     </div>
@@ -900,28 +900,97 @@ body { min-height: 100dvh; }
     }
   }
 
-  /* ---------- Filtro de voz (Web Audio) ---------- */
-  function createNoiseGate(ctx) {
+  /* ---------- Filtro de voz: RNNoise + reforço (Web Audio) ---------- */
+  var rnnLoadP = null;
+
+  function loadRNNoise() {
+    if (!rnnLoadP) {
+      rnnLoadP = import('./vendor/rnnoise.js').then(function (mod) {
+        return mod.default({
+          locateFile: function (f) { return 'vendor/' + f; }
+        });
+      }).catch(function () {
+        rnnLoadP = null;
+        return null;
+      });
+    }
+    return rnnLoadP;
+  }
+
+  function createVoiceNode(ctx) {
     var processor = ctx.createScriptProcessor(2048, 1, 1);
-    var THRESH = 0.004;
+    var FR = 480;
+    var THRESH = 0.002;
     var attackStep = 1 / (0.02 * ctx.sampleRate);
     var releaseStep = 1 / (0.35 * ctx.sampleRate);
-    processor._g = 0;
+    var pending = [];
+    var outQueue = [];
+    var gateG = 0;
+    var inF = new Float32Array(FR);
+    var outF = new Float32Array(FR);
+    var useRnn = ctx.sampleRate === 48000;
+    processor._rnn = { ready: false, wasm: null, st: 0, inPtr: 0, outPtr: 0 };
+
     processor.onaudioprocess = function (e) {
       var input = e.inputBuffer.getChannelData(0);
       var output = e.outputBuffer.getChannelData(0);
+      var L = input.length;
+      var rnnState = processor._rnn;
+
+      if (useRnn && rnnState.ready) {
+        for (var i = 0; i < L; i++) pending.push(input[i]);
+        while (pending.length >= FR) {
+          for (var k = 0; k < FR; k++) inF[k] = pending[k];
+          pending.splice(0, FR);
+          rnnProcess(rnnState, inF, outF);
+          for (var m = 0; m < FR; m++) outQueue.push(outF[m]);
+        }
+      } else {
+        for (var n = 0; n < L; n++) outQueue.push(input[n]);
+      }
+
+      var take = outQueue.length < L ? outQueue.length : L;
       var sum = 0;
-      for (var i = 0; i < input.length; i++) sum += input[i] * input[i];
-      var rms = Math.sqrt(sum / input.length);
+      for (var j = 0; j < take; j++) sum += outQueue[j] * outQueue[j];
+      var rms = take ? Math.sqrt(sum / take) : 0;
       var target = rms > THRESH ? 1 : 0;
-      var step = target > processor._g ? attackStep : releaseStep;
-      for (var j = 0; j < input.length; j++) {
-        if (target > processor._g) processor._g = Math.min(1, processor._g + step);
-        else processor._g = Math.max(0, processor._g - step);
-        output[j] = input[j] * processor._g;
+      var step = target > gateG ? attackStep : releaseStep;
+      for (var q = 0; q < L; q++) {
+        var s = q < take ? outQueue[q] : 0;
+        if (target > gateG) gateG = Math.min(1, gateG + step);
+        else gateG = Math.max(0, gateG - step);
+        output[q] = s * gateG;
+      }
+      if (take > 0) outQueue.splice(0, take);
+      if (e.outputBuffer.numberOfChannels > 1) {
+        e.outputBuffer.getChannelData(1).set(output);
       }
     };
     return processor;
+  }
+
+  function rnnProcess(r, inF, outF) {
+    var vIn = new Float32Array(r.wasm.HEAPF32.buffer, r.inPtr, inF.length);
+    var vOut = new Float32Array(r.wasm.HEAPF32.buffer, r.outPtr, outF.length);
+    vIn.set(inF);
+    r.wasm._rnnoise_process_frame(r.st, r.outPtr, r.inPtr);
+    outF.set(vOut);
+  }
+
+  function setupRnn(ctx, rnnState) {
+    loadRNNoise().then(function (wasm) {
+      if (!wasm) return;
+      if (!state.voiceNodes || state.voiceNodes.rnn !== rnnState) return;
+      if (ctx.sampleRate !== 48000) return;
+      try {
+        var st = wasm._rnnoise_create();
+        rnnState.wasm = wasm;
+        rnnState.st = st;
+        rnnState.inPtr = wasm._malloc(480 * 4);
+        rnnState.outPtr = wasm._malloc(480 * 4);
+        rnnState.ready = true;
+      } catch (err) {}
+    });
   }
 
   function ensureVoicePipeline() {
@@ -941,7 +1010,7 @@ body { min-height: 100dvh; }
       high.type = 'highpass';
       high.frequency.value = 120;
       high.Q.value = 0.7;
-      var gate = createNoiseGate(ctx);
+      var voice = createVoiceNode(ctx);
       var comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -22;
       comp.knee.value = 20;
@@ -952,12 +1021,13 @@ body { min-height: 100dvh; }
       gain.gain.value = 1.5;
       var dest = ctx.createMediaStreamDestination();
       source.connect(high);
-      high.connect(gate);
-      gate.connect(comp);
+      high.connect(voice);
+      voice.connect(comp);
       comp.connect(gain);
       gain.connect(dest);
       state.voiceCtx = ctx;
-      state.voiceNodes = { source: source, dest: dest };
+      state.voiceNodes = { source: source, dest: dest, rnn: voice._rnn };
+      setupRnn(ctx, voice._rnn);
       if (ctx.state === 'suspended') ctx.resume().catch(function () {});
     } catch (err) {
       state.voiceNodes = null;
@@ -974,6 +1044,12 @@ body { min-height: 100dvh; }
   }
 
   function closeVoice() {
+    if (state.voiceNodes && state.voiceNodes.rnn && state.voiceNodes.rnn.ready && state.voiceNodes.rnn.wasm) {
+      try { state.voiceNodes.rnn.wasm._rnnoise_destroy(state.voiceNodes.rnn.st); } catch (e) {}
+      try { state.voiceNodes.rnn.wasm._free(state.voiceNodes.rnn.inPtr); } catch (e) {}
+      try { state.voiceNodes.rnn.wasm._free(state.voiceNodes.rnn.outPtr); } catch (e) {}
+      state.voiceNodes.rnn.ready = false;
+    }
     if (state.voiceCtx) {
       try { state.voiceCtx.close(); } catch (e) {}
       state.voiceCtx = null;
@@ -1026,8 +1102,8 @@ body { min-height: 100dvh; }
     $('btn-flip').classList.toggle('on', state.facing === 'environment');
     var parts = [];
     parts.push(state.textInVideo ? 'Texto entra na gravação.' : 'Texto só na tela para ler.');
-    if (state.voiceOn) parts.push('Filtro de voz ativo: ruído de fundo reduzido.');
-    else parts.push('Filtro de voz desligado.');
+    if (state.voiceOn) parts.push('Isolamento de voz ativo: som de fundo removido, apenas a sua voz entra.');
+    else parts.push('Isolamento de voz desligado.');
     $('rec-info').innerHTML = parts.join(' ');
   }
 
