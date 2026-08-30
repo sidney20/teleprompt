@@ -228,9 +228,10 @@ body { min-height: 100dvh; }
 .sl-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#8b5cf6); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .sl-row .sl-val { width: 38px; text-align: right; font-size: .75rem; font-weight: 700; flex-shrink: 0; }
 
-.btn-row { display: flex; gap: 8px; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .tool-btn {
-  flex: 1; min-width: 0;
+  flex: 1 1 29%;
+  min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 9px 4px;
   border-radius: 12px;
@@ -415,11 +416,12 @@ body { min-height: 100dvh; }
         <button class="tool-btn" id="btn-play"><span class="ic">&#9654;</span>Rolar</button>
         <button class="tool-btn" id="btn-mirror"><span class="ic">&#8623;</span>Espelho</button>
         <button class="tool-btn" id="btn-flip"><span class="ic">&#8617;</span>Câmera</button>
+        <button class="tool-btn" id="btn-voice"><span class="ic">&#127911;</span>Filtro voz</button>
         <button class="tool-btn" id="btn-txtvideo"><span class="ic">AB</span>Txt no vídeo</button>
       </div>
       <div class="rec-row">
         <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
-        <div class="rec-info" id="rec-info">Grave falando o roteiro. O texto aparece na tela para você ler e não entra na gravação (a menos que ative &quot;Txt no vídeo&quot;).</div>
+        <div class="rec-info" id="rec-info">Filtro de voz ativo por padrão: ruído de fundo reduzido para focar na sua voz. Toque em &quot;Rolar&quot; para iniciar o texto.</div>
       </div>
       <div class="play-hint">Toque em &quot;Rolar&quot; para iniciar o texto e grave quando estiver pronto.</div>
     </div>
@@ -501,7 +503,11 @@ body { min-height: 100dvh; }
     canvas: null,
     lastBlobUrl: null,
     fileExt: 'mp4',
-    mime: ''
+    mime: '',
+    voiceOn: true,
+    voiceCtx: null,
+    voiceNodes: null,
+    canvasStream: null
   };
 
   function loadSettings() {
@@ -511,6 +517,7 @@ body { min-height: 100dvh; }
       if (s.size) $('size-range').value = s.size;
       if (typeof s.mirror === 'boolean') state.mirror = s.mirror;
       if (typeof s.textInVideo === 'boolean') state.textInVideo = s.textInVideo;
+      if (typeof s.voice === 'boolean') state.voiceOn = s.voice;
       if (s.facing) state.facing = s.facing;
     } catch (e) {}
   }
@@ -521,6 +528,7 @@ body { min-height: 100dvh; }
         size: parseInt($('size-range').value, 10),
         mirror: state.mirror,
         textInVideo: state.textInVideo,
+        voice: state.voiceOn,
         facing: state.facing
       }));
     } catch (e) {}
@@ -860,7 +868,7 @@ body { min-height: 100dvh; }
     try {
       state.stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: state.facing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       cam.srcObject = state.stream;
       cam.setAttribute('muted', '');
@@ -872,11 +880,93 @@ body { min-height: 100dvh; }
   }
 
   function stopCamera() {
+    closeVoice();
     if (state.stream) {
       state.stream.getTracks().forEach(function (t) { t.stop(); });
       state.stream = null;
       cam.srcObject = null;
     }
+  }
+
+  /* ---------- Filtro de voz (Web Audio) ---------- */
+  function createNoiseGate(ctx) {
+    var processor = ctx.createScriptProcessor(2048, 1, 1);
+    var THRESH = 0.004;
+    var attackStep = 1 / (0.02 * ctx.sampleRate);
+    var releaseStep = 1 / (0.35 * ctx.sampleRate);
+    processor._g = 0;
+    processor.onaudioprocess = function (e) {
+      var input = e.inputBuffer.getChannelData(0);
+      var output = e.outputBuffer.getChannelData(0);
+      var sum = 0;
+      for (var i = 0; i < input.length; i++) sum += input[i] * input[i];
+      var rms = Math.sqrt(sum / input.length);
+      var target = rms > THRESH ? 1 : 0;
+      var step = target > processor._g ? attackStep : releaseStep;
+      for (var j = 0; j < input.length; j++) {
+        if (target > processor._g) processor._g = Math.min(1, processor._g + step);
+        else processor._g = Math.max(0, processor._g - step);
+        output[j] = input[j] * processor._g;
+      }
+    };
+    return processor;
+  }
+
+  function ensureVoicePipeline() {
+    if (!state.stream || !state.voiceOn) return;
+    if (state.voiceNodes) {
+      if (state.voiceCtx && state.voiceCtx.state === 'suspended') {
+        state.voiceCtx.resume().catch(function () {});
+      }
+      return;
+    }
+    try {
+      var Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return;
+      var ctx = new Ctor();
+      var source = ctx.createMediaStreamSource(state.stream);
+      var high = ctx.createBiquadFilter();
+      high.type = 'highpass';
+      high.frequency.value = 120;
+      high.Q.value = 0.7;
+      var gate = createNoiseGate(ctx);
+      var comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -22;
+      comp.knee.value = 20;
+      comp.ratio.value = 10;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.25;
+      var gain = ctx.createGain();
+      gain.gain.value = 1.5;
+      var dest = ctx.createMediaStreamDestination();
+      source.connect(high);
+      high.connect(gate);
+      gate.connect(comp);
+      comp.connect(gain);
+      gain.connect(dest);
+      state.voiceCtx = ctx;
+      state.voiceNodes = { source: source, dest: dest };
+      if (ctx.state === 'suspended') ctx.resume().catch(function () {});
+    } catch (err) {
+      state.voiceNodes = null;
+      state.voiceCtx = null;
+    }
+  }
+
+  function getVoiceTrack() {
+    if (!state.voiceOn || !state.voiceNodes) return null;
+    try {
+      var tracks = state.voiceNodes.dest.stream.getAudioTracks();
+      return tracks.length ? tracks[0] : null;
+    } catch (err) { return null; }
+  }
+
+  function closeVoice() {
+    if (state.voiceCtx) {
+      try { state.voiceCtx.close(); } catch (e) {}
+      state.voiceCtx = null;
+    }
+    state.voiceNodes = null;
   }
 
   function applyMirror() {
@@ -906,13 +996,27 @@ body { min-height: 100dvh; }
     ensureCompose();
   });
 
+  $('btn-voice').addEventListener('click', function () {
+    if (state.recording) { toast('Pare a gravação antes de mudar'); return; }
+    state.voiceOn = !state.voiceOn;
+    saveSettings();
+    updateControlLabels();
+    if (state.stream) {
+      if (state.voiceOn) ensureVoicePipeline();
+      else closeVoice();
+    }
+  });
+
   function updateControlLabels() {
     $('btn-mirror').classList.toggle('on', state.mirror);
     $('btn-txtvideo').classList.toggle('on', state.textInVideo);
+    $('btn-voice').classList.toggle('on', state.voiceOn);
     $('btn-flip').classList.toggle('on', state.facing === 'environment');
-    $('rec-info').innerHTML = state.textInVideo
-      ? 'Modo texto no vídeo ligado: a gravação sai com o roteiro sobre a imagem.'
-      : 'Grave falando o roteiro. O texto aparece na tela para você ler e não entra na gravação.';
+    var parts = [];
+    parts.push(state.textInVideo ? 'Texto entra na gravação.' : 'Texto só na tela para ler.');
+    if (state.voiceOn) parts.push('Filtro de voz ativo: ruído de fundo reduzido.');
+    else parts.push('Filtro de voz desligado.');
+    $('rec-info').innerHTML = parts.join(' ');
   }
 
   /* ---------- canvas ---------- */
@@ -985,12 +1089,14 @@ body { min-height: 100dvh; }
 
   function startRecording() {
     if (!state.stream) { toast('Câmera não iniciada'); return; }
+    if (state.voiceOn) ensureVoicePipeline();
     var pm = pickMime();
     state.canvasStream = state.textInVideo ? state.canvas.captureStream(30) : null;
     var vidTracks = state.canvasStream
       ? state.canvasStream.getVideoTracks()
       : state.stream.getVideoTracks();
-    var audioTracks = state.stream.getAudioTracks();
+    var voiceTrack = getVoiceTrack();
+    var audioTracks = voiceTrack ? [voiceTrack] : state.stream.getAudioTracks();
     var ms = new MediaStream(vidTracks.concat(audioTracks));
     var opts = {};
     if (pm.mime) opts.mimeType = pm.mime;
