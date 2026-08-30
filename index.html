@@ -198,6 +198,27 @@ body { min-height: 100dvh; }
   will-change: transform;
 }
 #scroll-content div { line-height: 1.7; }
+.read-fade {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 46px;
+  background: linear-gradient(transparent, rgba(0,0,0,.55));
+  pointer-events: none;
+}
+.read-handle {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 6;
+}
+.read-handle::after {
+  content: '';
+  width: 46px; height: 4px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.4);
+}
+#reading-wrap.dragging { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,.35); }
 
 .reader-top {
   position: absolute;
@@ -440,6 +461,8 @@ body { min-height: 100dvh; }
 
     <div id="reading-wrap">
       <div id="scroll-content"></div>
+      <div class="read-fade"></div>
+      <div class="read-handle" id="read-handle" title="Arraste para ajustar o tamanho"></div>
     </div>
 
     <div class="reader-top">
@@ -580,7 +603,8 @@ body { min-height: 100dvh; }
     voiceOn: true,
     voiceCtx: null,
     voiceNodes: null,
-    canvasStream: null
+    canvasStream: null,
+    readH: 0.46
   };
 
   function loadSettings() {
@@ -592,6 +616,7 @@ body { min-height: 100dvh; }
       if (typeof s.textInVideo === 'boolean') state.textInVideo = s.textInVideo;
       if (typeof s.voice === 'boolean') state.voiceOn = s.voice;
       if (s.facing) state.facing = s.facing;
+      if (typeof s.readH === 'number') state.readH = Math.max(0.18, Math.min(0.93, s.readH));
     } catch (e) {}
   }
   function saveSettings() {
@@ -602,7 +627,8 @@ body { min-height: 100dvh; }
         mirror: state.mirror,
         textInVideo: state.textInVideo,
         voice: state.voiceOn,
-        facing: state.facing
+        facing: state.facing,
+        readH: state.readH
       }));
     } catch (e) {}
   }
@@ -814,12 +840,51 @@ body { min-height: 100dvh; }
     timerEl.textContent = '00:00';
     updateControlLabels();
     showScreen('reader');
+    applyReadHeight();
     buildLines();
     setScrollState(0, false);
     startCamera();
     initCanvas();
     loopScroll();
     ensureCompose();
+  }
+
+  function applyReadHeight() {
+    var vh = document.documentElement.clientHeight;
+    readingWrap.style.height = Math.round(vh * state.readH) + 'px';
+  }
+
+  function initReadDrag() {
+    var handle = $('read-handle');
+    var startY = 0, startH = 0;
+    handle.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      startY = e.clientY;
+      startH = readingWrap.getBoundingClientRect().height;
+      readingWrap.classList.add('dragging');
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+    function onMove(e) {
+      var vh = document.documentElement.clientHeight;
+      var top = readingWrap.getBoundingClientRect().top;
+      var minH = Math.round(vh * 0.18);
+      var maxH = Math.round(vh - top - 185);
+      if (maxH < minH) maxH = minH;
+      var h = startH + (e.clientY - startY);
+      h = Math.max(minH, Math.min(h, maxH));
+      readingWrap.style.height = h + 'px';
+      state.readH = h / vh;
+      recomputeMax();
+      var newY = Math.max(0, Math.min(state.scrollY, state.maxScroll));
+      setScrollState(newY, state.scrolling);
+    }
+    function onUp() {
+      readingWrap.classList.remove('dragging');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      saveSettings();
+    }
   }
 
   function buildLines() {
@@ -1231,11 +1296,11 @@ body { min-height: 100dvh; }
   function pickMime() {
     if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return { ext: 'mp4', mime: '' };
     var candidates = [
-      ['mp4', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'],
-      ['mp4', 'video/mp4'],
       ['webm', 'video/webm;codecs=vp9,opus'],
       ['webm', 'video/webm;codecs=vp8,opus'],
-      ['webm', 'video/webm']
+      ['webm', 'video/webm'],
+      ['mp4', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'],
+      ['mp4', 'video/mp4']
     ];
     for (var i = 0; i < candidates.length; i++) {
       if (MediaRecorder.isTypeSupported(candidates[i][1])) return { ext: candidates[i][0], mime: candidates[i][1] };
@@ -1266,7 +1331,7 @@ body { min-height: 100dvh; }
     state.recorder = rec;
     rec.ondataavailable = function (e) { if (e.data && e.data.size > 0) state.chunks.push(e.data); };
     rec.onstop = onRecordingStopped;
-    rec.start(200);
+    rec.start();
     timerEl.textContent = '00:00';
     state.timerSec = 0;
     state.timerInt = setInterval(function () {
@@ -1286,16 +1351,48 @@ body { min-height: 100dvh; }
     state.recording = false;
     clearInterval(state.timerInt);
     $('btn-record').classList.remove('recording');
+    if (state.scrolling) setScrollState(state.scrollY, false);
     if (state.recorder && state.recorder.state !== 'inactive') {
       try { state.recorder.stop(); } catch (e) {}
     }
     ensureCompose();
   }
 
+  var webmFixP = null;
+  function loadWebmFix() {
+    if (!webmFixP) {
+      webmFixP = import('./vendor/webm-duration-fix.js').then(function (m) {
+        var f = m && m.default;
+        if (f && typeof f !== 'function' && typeof f.default === 'function') f = f.default;
+        return typeof f === 'function' ? f : null;
+      }).catch(function () {
+        webmFixP = null;
+        return null;
+      });
+    }
+    return webmFixP;
+  }
+
   function onRecordingStopped() {
     if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
+    if (state.scrolling) setScrollState(state.scrollY, false);
     var type = (state.recorder && state.recorder.mimeType) || (state.fileExt === 'mp4' ? 'video/mp4' : 'video/webm');
     var blob = new Blob(state.chunks, { type: type });
+    if (/webm/i.test(type)) {
+      loadWebmFix().then(function (fix) {
+        if (fix) {
+          toast('Corrigindo a duração do vídeo...');
+          fix(blob).then(showPreview).catch(function () { showPreview(blob); });
+        } else {
+          showPreview(blob);
+        }
+      });
+    } else {
+      showPreview(blob);
+    }
+  }
+
+  function showPreview(blob) {
     if (state.lastBlobUrl) URL.revokeObjectURL(state.lastBlobUrl);
     state.lastBlobUrl = URL.createObjectURL(blob);
     var preview = $('rec-preview');
@@ -1346,6 +1443,8 @@ body { min-height: 100dvh; }
 
   function backToScripts() {
     if (state.recording) stopRecording();
+    state.scrolling = false;
+    $('btn-play').innerHTML = '<span class="ic">\u25B6</span>Rolar';
     if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
     stopCamera();
     cancelAnimationFrame(state.raf);
@@ -1395,6 +1494,7 @@ body { min-height: 100dvh; }
   renderSaved();
   secureCheck();
   registerSW();
+  initReadDrag();
 
   window.addEventListener('beforeunload', function () {
     if (state.recording) stopRecording();

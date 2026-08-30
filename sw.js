@@ -1,4 +1,4 @@
-const CACHE = 'teleprompt-v4';
+const CACHE = 'teleprompt-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,10 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './vendor/rnnoise.js',
-  './vendor/rnnoise.wasm'
+  './vendor/rnnoise.wasm',
+  './vendor/webm-duration-fix.js',
+  './vendor/int64-buffer.js',
+  './vendor/ebml-block.js'
 ];
 
 self.addEventListener('install', (event) => {
