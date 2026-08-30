@@ -339,6 +339,109 @@ body { min-height: 100dvh; }
 .cfg-grid .tool-btn { width: 100%; }
 .cfg-size { margin-bottom: 4px; }
 
+.btn-filters {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: none;
+  border-radius: 16px;
+  padding: 15px;
+  font-size: .95rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  box-shadow: 0 4px 18px rgba(239,68,68,.35);
+  margin-bottom: 14px;
+}
+.btn-filters:active { transform: scale(.98); }
+
+/* Filtro de efeito - tela cheia */
+#filter-modal {
+  display: none;
+  position: fixed; inset: 0;
+  flex-direction: column;
+  background: #000;
+  z-index: 1500;
+}
+#filter-modal.visible { display: flex; }
+#filter-modal .fil-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+#fil-preview {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+#fil-name {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  background: rgba(0,0,0,.45);
+  padding: 6px 16px;
+  border-radius: 999px;
+  z-index: 2;
+}
+#fil-cancel {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top));
+  right: 14px;
+  z-index: 2;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,.45);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+.fil-bottom {
+  background: linear-gradient(transparent, rgba(0,0,0,.85));
+  padding: 30px 12px calc(16px + env(safe-area-inset-bottom));
+  position: relative;
+  z-index: 2;
+}
+.fil-chips {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 4px 10px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.fil-chips::-webkit-scrollbar { display: none; }
+.cfg-chip {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 6px;
+  border: 2px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.07);
+  color: #e5e7eb;
+  border-radius: 16px;
+  padding: 10px 12px 8px;
+  width: 88px;
+  cursor: pointer;
+}
+.cfg-chip .dot {
+  width: 46px; height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #d4d4d8, #a1a1aa);
+}
+.cfg-chip .chip-name { font-size: .7rem; font-weight: 600; }
+.cfg-chip.on { border-color: #8b5cf6; background: rgba(139,92,246,.28); }
+.cfg-chip.on .chip-name { color: #fff; }
+.fil-done-row { margin-top: 6px; }
+
 /* ---------- MODALS ---------- */
 .modal-overlay {
   display: none;
@@ -505,9 +608,9 @@ body { min-height: 100dvh; }
 <div class="modal-overlay" id="config-modal">
   <div class="modal">
     <h2>&#9881; Configurações</h2>
-    <p class="desc">Ferramentas extra da gravação.</p>
+    <p class="desc">Ferramentas extra da gravação. O filtro de efeito aparece na prévia e entra no vídeo final.</p>
     <div class="cfg-grid">
-      <button class="tool-btn" id="btn-mirror"><span class="ic">&#8623;</span>Espelho</button>
+      <button class="tool-btn" id="btn-mirror"><span class="ic">&#8623;</span>Espelhar vídeo</button>
       <button class="tool-btn" id="btn-flip"><span class="ic">&#8617;</span>Câmera</button>
       <button class="tool-btn" id="btn-voice"><span class="ic">&#127911;</span>Isolar voz</button>
       <button class="tool-btn" id="btn-txtvideo"><span class="ic">AB</span>Txt no vídeo</button>
@@ -517,8 +620,24 @@ body { min-height: 100dvh; }
       <input type="range" id="size-range" min="16" max="46" step="1" value="26">
       <span class="sl-val" id="size-val">26</span>
     </div>
+    <button class="btn-filters" id="btn-filters"><span class="ic">&#127912;</span>Filtro de efeito</button>
     <div class="mbtns">
       <button class="mbtn" id="cfg-close">Concluído</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FILTRO DE EFEITO ============ -->
+<div id="filter-modal">
+  <div class="fil-stage">
+    <video id="fil-preview" playsinline autoplay muted></video>
+    <div id="fil-name">Original</div>
+    <button id="fil-cancel" title="Fechar">&#10005;</button>
+  </div>
+  <div class="fil-bottom">
+    <div class="fil-chips" id="fil-chips"></div>
+    <div class="fil-done-row">
+      <button class="mbtn" id="fil-done">Concluído</button>
     </div>
   </div>
 </div>
@@ -577,12 +696,23 @@ body { min-height: 100dvh; }
   var STORE_KEY = 'teleprompt_docs_v1';
   var SETTINGS_KEY = 'teleprompt_settings_v1';
 
+  var FILTERS = [
+    { label: 'Original', css: 'none' },
+    { label: 'P&B', css: 'grayscale(1) contrast(1.1)' },
+    { label: 'Sépia', css: 'sepia(0.7) contrast(1.05) brightness(1.05)' },
+    { label: 'Vintage', css: 'sepia(0.3) saturate(1.25) contrast(0.92) brightness(1.06)' },
+    { label: 'Vívido', css: 'saturate(1.6) contrast(1.12)' },
+    { label: 'Suave', css: 'saturate(0.82) contrast(0.95) brightness(1.08)' },
+    { label: 'Gelo', css: 'saturate(0.95) hue-rotate(12deg) brightness(1.06)' },
+    { label: 'Beleza', css: 'blur(0.8px) brightness(1.05) saturate(1.05)' }
+  ];
+
   var state = {
     doc: null,
     idx: 0,
     stream: null,
     facing: 'user',
-    mirror: true,
+    mirror: false,
     textInVideo: false,
     recording: false,
     recorder: null,
@@ -604,7 +734,8 @@ body { min-height: 100dvh; }
     voiceCtx: null,
     voiceNodes: null,
     canvasStream: null,
-    readH: 0.46
+    readH: 0.46,
+    filterId: 0
   };
 
   function loadSettings() {
@@ -617,6 +748,7 @@ body { min-height: 100dvh; }
       if (typeof s.voice === 'boolean') state.voiceOn = s.voice;
       if (s.facing) state.facing = s.facing;
       if (typeof s.readH === 'number') state.readH = Math.max(0.18, Math.min(0.93, s.readH));
+      if (typeof s.filter === 'number' && s.filter >= 0 && s.filter < FILTERS.length) state.filterId = s.filter;
     } catch (e) {}
   }
   function saveSettings() {
@@ -628,7 +760,8 @@ body { min-height: 100dvh; }
         textInVideo: state.textInVideo,
         voice: state.voiceOn,
         facing: state.facing,
-        readH: state.readH
+        readH: state.readH,
+        filter: state.filterId
       }));
     } catch (e) {}
   }
@@ -1184,7 +1317,7 @@ body { min-height: 100dvh; }
   }
 
   function applyMirror() {
-    cam.style.transform = state.mirror ? 'scaleX(-1)' : 'none';
+    cam.style.transform = state.facing === 'user' ? 'scaleX(-1)' : 'none';
   }
 
   $('btn-flip').addEventListener('click', function () {
@@ -1199,7 +1332,7 @@ body { min-height: 100dvh; }
     state.mirror = !state.mirror;
     saveSettings();
     updateControlLabels();
-    applyMirror();
+    toast('Espelho do vídeo ' + (state.mirror ? 'ligado' : 'desligado'));
   });
 
   $('btn-txtvideo').addEventListener('click', function () {
@@ -1227,6 +1360,56 @@ body { min-height: 100dvh; }
   });
   $('cfg-close').addEventListener('click', function () { $('config-modal').classList.remove('visible'); });
   $('config-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
+
+  function applyFilter() {
+    var css = FILTERS[state.filterId].css;
+    cam.style.filter = css;
+    $('fil-preview').style.filter = css;
+    $('fil-name').textContent = FILTERS[state.filterId].label;
+    var chips = $('fil-chips').querySelectorAll('.cfg-chip');
+    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle('on', i === state.filterId);
+  }
+
+  function renderFilterBar() {
+    var bar = $('fil-chips');
+    if (bar.childNodes.length === 0) {
+      var html = '';
+      for (var i = 0; i < FILTERS.length; i++) {
+        html += '<button class="cfg-chip" data-i="' + i + '"><span class="dot"></span><span class="chip-name">' + FILTERS[i].label + '</span></button>';
+      }
+      bar.innerHTML = html;
+    }
+    applyFilter();
+  }
+
+  async function openFilterPicker() {
+    if (state.recording) { toast('Pare a gravação antes de mudar o filtro'); return; }
+    $('config-modal').classList.remove('visible');
+    renderFilterBar();
+    if (!state.stream || cam.videoWidth <= 0) {
+      await startCamera();
+    }
+    var fp = $('fil-preview');
+    fp.srcObject = state.stream;
+    fp.style.transform = state.facing === 'user' ? 'scaleX(-1)' : 'none';
+    fp.style.filter = FILTERS[state.filterId].css;
+    try { fp.play(); } catch (e) {}
+    $('filter-modal').classList.add('visible');
+  }
+
+  $('btn-filters').addEventListener('click', openFilterPicker);
+  $('fil-cancel').addEventListener('click', function () { $('filter-modal').classList.remove('visible'); });
+  $('fil-done').addEventListener('click', function () {
+    saveSettings();
+    $('filter-modal').classList.remove('visible');
+  });
+  $('fil-chips').addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('.cfg-chip') : null;
+    if (!chip) return;
+    if (state.recording) { toast('Pare a gravação antes de mudar o filtro'); return; }
+    state.filterId = parseInt(chip.getAttribute('data-i'), 10);
+    applyFilter();
+  });
 
   function updateControlLabels() {
     $('btn-mirror').classList.toggle('on', state.mirror);
@@ -1257,9 +1440,10 @@ body { min-height: 100dvh; }
         ctx.clearRect(0, 0, c.width, c.height);
         ctx.save();
         if (state.mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+        if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
         ctx.drawImage(cam, 0, 0, c.width, c.height);
-        if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
         ctx.restore();
+        if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
       }
       state.composeRaf = requestAnimationFrame(draw);
     }
@@ -1312,10 +1496,11 @@ body { min-height: 100dvh; }
     if (!state.stream) { toast('Câmera não iniciada'); return; }
     if (state.voiceOn) ensureVoicePipeline();
     var pm = pickMime();
-    state.canvasStream = state.textInVideo ? state.canvas.captureStream(30) : null;
-    var vidTracks = state.canvasStream
-      ? state.canvasStream.getVideoTracks()
-      : state.stream.getVideoTracks();
+    initCanvas();
+    state.recording = true;
+    ensureCompose();
+    state.canvasStream = state.canvas.captureStream(30);
+    var vidTracks = state.canvasStream.getVideoTracks();
     var voiceTrack = getVoiceTrack();
     var audioTracks = voiceTrack ? [voiceTrack] : state.stream.getAudioTracks();
     var ms = new MediaStream(vidTracks.concat(audioTracks));
@@ -1323,9 +1508,16 @@ body { min-height: 100dvh; }
     if (pm.mime) opts.mimeType = pm.mime;
     var rec;
     try { rec = new MediaRecorder(ms, opts); }
-    catch (e) { try { rec = new MediaRecorder(ms); } catch (e2) { toast('Gravação não suportada neste navegador'); return; } }
-
-    state.recording = true;
+    catch (e) {
+      try { rec = new MediaRecorder(ms); }
+      catch (e2) {
+        state.recording = false;
+        if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
+        ensureCompose();
+        toast('Gravação não suportada neste navegador');
+        return;
+      }
+    }
     state.fileExt = pm.ext;
     state.chunks = [];
     state.recorder = rec;
@@ -1499,6 +1691,7 @@ body { min-height: 100dvh; }
 
   /* ---------- init ---------- */
   loadSettings();
+  applyFilter();
   renderSaved();
   secureCheck();
   registerSW();
