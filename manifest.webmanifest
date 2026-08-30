@@ -1,0 +1,16 @@
+{
+  "name": "TelePrompT - Gravar roteiros",
+  "short_name": "TelePrompT",
+  "description": "Teleprompter com gravação de vídeo: cole o link do Google Docs e leia seus roteiros gravando direto no celular.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0c29",
+  "theme_color": "#0f0c29",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
