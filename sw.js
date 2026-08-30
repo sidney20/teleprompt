@@ -1,4 +1,4 @@
-const CACHE = 'teleprompt-v1';
+const CACHE = 'teleprompt-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,7 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) => cache.addAll(ASSETS))
   );
 });
 
@@ -23,20 +23,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== location.origin) return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response && response.ok && (url.pathname.startsWith('/document') || /index\.html|parser\.js|\.png|\.svg/.test(url.pathname))) {
-          const clone = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      });
-    })
-  );
+  const accept = event.request.headers.get('accept') || '';
+  const isHtml = event.request.mode === 'navigate' || accept.indexOf('text/html') !== -1;
+
+  event.respondWith(isHtml ? freshFirst(event) : cacheFirst(event));
 });
+
+async function freshFirst(event) {
+  const cache = await caches.open(CACHE);
+  try {
+    const response = await fetch(event.request);
+    if (response && response.ok) {
+      cache.put(event.request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    const cached = await cache.match(event.request);
+    if (cached) return cached;
+    throw err;
+  }
+}
+
+async function cacheFirst(event) {
+  const cached = await caches.match(event.request);
+  if (cached) return cached;
+  const response = await fetch(event.request);
+  if (response && response.ok) {
+    cachePut(event.request, response.clone());
+  }
+  return response;
+}
+
+function cachePut(request, response) {
+  caches.open(CACHE).then((cache) => cache.put(request.clone(), response));
+}

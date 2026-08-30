@@ -439,6 +439,18 @@ body { min-height: 100dvh; }
   </div>
 </div>
 
+<!-- ============ MODAL ATUALIZAÇÃO ============ -->
+<div class="modal-overlay" id="update-modal">
+  <div class="modal">
+    <h2>&#128640; Nova versão disponível</h2>
+    <p class="desc" id="update-desc">Há uma atualização do TelePrompT para você. Atualize agora para usar os recursos mais recentes.</p>
+    <div class="mbtns">
+      <button class="mbtn green" id="btn-update-now">Atualizar agora</button>
+      <button class="mbtn ghost" id="btn-update-later">Agora não</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL GRAVAÇÃO ============ -->
 <div class="modal-overlay" id="rec-modal">
   <div class="modal">
@@ -1238,16 +1250,68 @@ body { min-height: 100dvh; }
   loadSettings();
   renderSaved();
   secureCheck();
-
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
-  }
+  registerSW();
 
   window.addEventListener('beforeunload', function () {
     if (state.recording) stopRecording();
     stopCamera();
   });
 })();
+
+/* ---------- atualização do app ---------- */
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  if (!/^https?:$/.test(location.protocol)) return;
+
+  navigator.serviceWorker.register('sw.js').then(function (reg) {
+    if (!navigator.serviceWorker.controller) return;
+
+    if (reg.waiting) {
+      showUpdateDialog(reg);
+    }
+
+    reg.addEventListener('updatefound', function () {
+      var nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', function () {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          showUpdateDialog(reg);
+        }
+      });
+    });
+  }).catch(function () {});
+
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+
+function showUpdateDialog(reg) {
+  var m = document.getElementById('update-modal');
+  if (m.classList.contains('visible')) return;
+  m.classList.add('visible');
+
+  document.getElementById('btn-update-now').onclick = function () {
+    m.classList.remove('visible');
+    if (reg && reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      window.location.reload();
+    }
+  };
+  document.getElementById('btn-update-later').onclick = function () {
+    m.classList.remove('visible');
+  };
+  m.addEventListener('click', function (e) {
+    if (e.target === m) {
+      m.classList.remove('visible');
+      m.onclick = null;
+    }
+  });
+}
 </script>
 </body>
 </html>
