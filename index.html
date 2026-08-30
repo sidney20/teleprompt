@@ -270,6 +270,54 @@ body { min-height: 100dvh; }
 
 .play-hint { text-align: center; font-size: .7rem; color: #9ca3af; }
 
+.main-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.play-btn {
+  flex: 1 1 140px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 15px 10px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg,#6366f1,#8b5cf6);
+  color: #fff;
+  font-size: .95rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(99,102,241,.4);
+}
+.play-btn .ic { font-size: 1rem; }
+.play-btn:active { transform: scale(.98); }
+.min-btn {
+  width: 100px;
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font-size: .62rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.min-btn .ic { font-size: 1rem; }
+.min-btn:active { transform: scale(.96); }
+.gear-btn {
+  width: 56px; height: 56px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: #e5e7eb;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+.gear-btn:active { transform: scale(.94); }
+
+.cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.cfg-grid .tool-btn { width: 100%; }
+.cfg-size { margin-bottom: 4px; }
+
 /* ---------- MODALS ---------- */
 .modal-overlay {
   display: none;
@@ -406,24 +454,15 @@ body { min-height: 100dvh; }
         <input type="range" id="speed-range" min="20" max="140" step="5" value="45">
         <span class="sl-val" id="speed-val">45</span>
       </div>
-      <div class="sl-row">
-        <label>Texto</label>
-        <input type="range" id="size-range" min="16" max="46" step="1" value="26">
-        <span class="sl-val" id="size-val">26</span>
-      </div>
-      <div class="btn-row">
-        <button class="tool-btn" id="btn-restart"><span class="ic">&#8634;</span>Tela inicial</button>
-        <button class="tool-btn" id="btn-play"><span class="ic">&#9654;</span>Rolar</button>
-        <button class="tool-btn" id="btn-mirror"><span class="ic">&#8623;</span>Espelho</button>
-        <button class="tool-btn" id="btn-flip"><span class="ic">&#8617;</span>Câmera</button>
-        <button class="tool-btn" id="btn-voice"><span class="ic">&#127911;</span>Filtro voz</button>
-        <button class="tool-btn" id="btn-txtvideo"><span class="ic">AB</span>Txt no vídeo</button>
+      <div class="main-row">
+        <button class="min-btn" id="btn-restart"><span class="ic">&#8634;</span>Tela inicial</button>
+        <button class="play-btn" id="btn-play"><span class="ic">&#9654;</span>Rolar</button>
+        <button class="gear-btn" id="btn-config" title="Configurações">&#9881;</button>
       </div>
       <div class="rec-row">
         <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
         <div class="rec-info" id="rec-info">Isolamento de voz ativo: todo o barulho de fora é removido e entra apenas a sua voz. Toque em &quot;Rolar&quot; para iniciar o texto.</div>
       </div>
-      <div class="play-hint">Toque em &quot;Rolar&quot; para iniciar o texto e grave quando estiver pronto.</div>
     </div>
   </section>
 </div>
@@ -435,6 +474,28 @@ body { min-height: 100dvh; }
     <div id="inst-body"></div>
     <div class="mbtns">
       <button class="mbtn ghost" id="inst-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL CONFIGURAÇÕES ============ -->
+<div class="modal-overlay" id="config-modal">
+  <div class="modal">
+    <h2>&#9881; Configurações</h2>
+    <p class="desc">Ferramentas extra da gravação.</p>
+    <div class="cfg-grid">
+      <button class="tool-btn" id="btn-mirror"><span class="ic">&#8623;</span>Espelho</button>
+      <button class="tool-btn" id="btn-flip"><span class="ic">&#8617;</span>Câmera</button>
+      <button class="tool-btn" id="btn-voice"><span class="ic">&#127911;</span>Isolar voz</button>
+      <button class="tool-btn" id="btn-txtvideo"><span class="ic">AB</span>Txt no vídeo</button>
+    </div>
+    <div class="sl-row cfg-size">
+      <label>Texto</label>
+      <input type="range" id="size-range" min="16" max="46" step="1" value="26">
+      <span class="sl-val" id="size-val">26</span>
+    </div>
+    <div class="mbtns">
+      <button class="mbtn" id="cfg-close">Concluído</button>
     </div>
   </div>
 </div>
@@ -1094,6 +1155,13 @@ body { min-height: 100dvh; }
       else closeVoice();
     }
   });
+
+  $('btn-config').addEventListener('click', function () {
+    updateControlLabels();
+    $('config-modal').classList.add('visible');
+  });
+  $('cfg-close').addEventListener('click', function () { $('config-modal').classList.remove('visible'); });
+  $('config-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
 
   function updateControlLabels() {
     $('btn-mirror').classList.toggle('on', state.mirror);
