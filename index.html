@@ -1431,23 +1431,30 @@ body { min-height: 100dvh; }
   function ensureCompose() {
     if (state.composeRaf) { cancelAnimationFrame(state.composeRaf); state.composeRaf = null; }
     if (!state.textInVideo && !state.recording) return;
-    function draw() {
-      if (state.stream && cam.videoWidth > 0) {
-        var c = state.canvas;
-        var vw = cam.videoWidth, vh = cam.videoHeight;
-        if (c.width !== vw || c.height !== vh) { c.width = vw; c.height = vh; }
-        var ctx = c.getContext('2d');
-        ctx.clearRect(0, 0, c.width, c.height);
-        ctx.save();
-        if (state.mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
-        if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
-        ctx.drawImage(cam, 0, 0, c.width, c.height);
-        ctx.restore();
-        if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
+    var lastT = performance.now();
+    function draw(now) {
+      if (now - lastT >= 33) {
+        lastT = now;
+        drawCompose();
       }
       state.composeRaf = requestAnimationFrame(draw);
     }
+    drawCompose();
     state.composeRaf = requestAnimationFrame(draw);
+  }
+
+  function drawCompose() {
+    if (!state.stream || cam.videoWidth <= 0) return;
+    var c = state.canvas;
+    var vw = cam.videoWidth, vh = cam.videoHeight;
+    if (c.width !== vw || c.height !== vh) { c.width = vw; c.height = vh; }
+    var ctx = c.getContext('2d');
+    ctx.save();
+    if (state.mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+    if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
+    ctx.drawImage(cam, 0, 0, c.width, c.height);
+    ctx.restore();
+    if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
   }
 
   function drawTextOverlay(ctx, w, h) {
