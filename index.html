@@ -514,6 +514,22 @@ body { min-height: 100dvh; }
 .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -3px; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.install-pill {
+  display: none;
+  margin: 16px auto 0;
+  border: 1px solid rgba(139,92,246,.45);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-weight: 700;
+  font-size: .84rem;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(99,102,241,.35);
+}
+.install-pill.show { display: inline-block; }
+.install-pill:active { transform: scale(.97); }
+
 @media (min-width: 560px) {
   #screen-home { border-radius: 0; }
   .modal { border-radius: 24px; margin-bottom: 40px; }
@@ -529,6 +545,7 @@ body { min-height: 100dvh; }
       <div class="logo">&#127916;</div>
       <h1>TelePrompT</h1>
       <p>Cole o link do Google Docs com seus roteiros.<br>O app separa tudo e você já grava.</p>
+      <button class="install-pill" id="btn-install">&#11015; Instalar app no celular</button>
     </div>
 
     <div class="card">
@@ -1730,6 +1747,47 @@ body { min-height: 100dvh; }
     }
   }
 
+  /* ---------- instalar app ---------- */
+  function initInstall() {
+    var btn = $('btn-install');
+    var installed = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    if (!btn || installed || navigator.standalone === true) return;
+
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      btn.classList.add('show');
+    });
+
+    window.addEventListener('appinstalled', function () {
+      toast('App instalado! Ache o ícone na tela inicial.');
+      btn.classList.remove('show');
+    });
+
+    if (!deferredPrompt && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      btn.classList.add('show');
+    }
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+      btn.classList.add('show');
+    }
+
+    btn.addEventListener('click', function () {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt = null;
+        return;
+      }
+      var m = $('inst-modal');
+      $('inst-title').textContent = 'Instalar o app';
+      var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      $('inst-body').innerHTML = (ios
+        ? '<div class="inst-block"><div class="ib-title">No iPhone/iPad</div><p>1. Toque no botão <b>Compartilhar</b> (quadrado com seta para cima) na barra do Safari.\n2. Role para baixo e toque em <b>Adicionar à Tela de Início</b>.\n3. Toque em <b>Adicionar</b>. Pronto: o app aparece na tela inicial como um ícone de app.</p></div>'
+        : '<div class="inst-block"><div class="ib-title">No Android / Chrome</div><p>1. Toque no menu <b>&#9776;</b> (três pontinhos) do navegador.\n2. Escolha <b>Adicionar à tela inicial</b> (ou "Instalar app").\n3. Confirme. Pronto: o app aparece como um ícone na tela inicial.</p></div>');
+      m.classList.add('visible');
+    });
+  }
+
   /* ---------- init ---------- */
   loadSettings();
   applyFilter();
@@ -1738,6 +1796,7 @@ body { min-height: 100dvh; }
   secureCheck();
   registerSW();
   initReadDrag();
+  initInstall();
 
   window.addEventListener('beforeunload', function () {
     if (state.recording) stopRecording();
