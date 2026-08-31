@@ -567,7 +567,6 @@ body { min-height: 100dvh; }
         <button id="btn-load" class="btn-primary">Carregar</button>
       </div>
       <div id="status" class="status"></div>
-      <div class="example"><button id="btn-example">Usar link de exemplo</button></div>
     </div>
 
     <div class="saved-docs" id="saved-docs-wrap" style="display:none">
@@ -728,7 +727,6 @@ body { min-height: 100dvh; }
   var homeLink = $('doc-link');
   var btnLoad = $('btn-load');
   var statusEl = $('status');
-  var btnExample = $('btn-example');
   var savedWrap = $('saved-docs-wrap');
   var savedDocsEl = $('saved-docs');
   var scriptsList = $('scripts-list');
@@ -1815,11 +1813,6 @@ body { min-height: 100dvh; }
 
   homeLink.addEventListener('paste', function () {
     setTimeout(function () { btnLoad.click(); }, 50);
-  });
-
-  btnExample.addEventListener('click', function () {
-    homeLink.value = 'https://docs.google.com/document/d/1LZ2HeLuX8Q6vCgg0OVHe19la-tpXkrDyzepxFzIxgf8/edit?usp=sharing';
-    loadDoc(homeLink.value);
   });
 
   function secureCheck() {
