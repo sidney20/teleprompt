@@ -209,6 +209,10 @@ body { min-height: 100dvh; }
   font-weight: 650;
   text-shadow: 0 1px 3px rgba(0,0,0,.8);
   will-change: transform;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 #scroll-content div { line-height: 1.7; }
 .read-fade {
@@ -1113,6 +1117,25 @@ body { min-height: 100dvh; }
     }
   }
 
+  function initManualScroll() {
+    var startY = 0, startScroll = 0, dragging = false;
+    scrollContent.addEventListener('pointerdown', function (e) {
+      if (state.recording) return;
+      dragging = true;
+      startY = e.clientY;
+      startScroll = state.scrollY;
+      if (state.scrolling) setScrollState(state.scrollY, false);
+      try { scrollContent.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    scrollContent.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var dY = startScroll + (startY - e.clientY);
+      setScrollState(dY, false);
+    });
+    scrollContent.addEventListener('pointerup', function () { dragging = false; });
+    scrollContent.addEventListener('pointercancel', function () { dragging = false; });
+  }
+
   function buildLines() {
     var s = state.doc[state.idx];
     var fontPx = parseInt($('size-range').value, 10);
@@ -1873,6 +1896,7 @@ body { min-height: 100dvh; }
   secureCheck();
   registerSW();
   initReadDrag();
+  initManualScroll();
   initInstall();
 
   window.addEventListener('beforeunload', function () {
