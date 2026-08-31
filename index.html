@@ -91,7 +91,10 @@ body { min-height: 100dvh; }
 }
 
 .saved-docs { margin-top: 22px; }
-.saved-docs h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; color: #9ca3af; margin-bottom: 10px; font-weight: 600; }
+.saved-docs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.saved-docs-head h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; color: #9ca3af; font-weight: 600; margin: 0; }
+.saved-docs-head .clear-all { background: none; border: 1px solid rgba(248,113,113,.35); color: #f87171; font-size: .72rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.saved-docs-head .clear-all:active { background: rgba(248,113,113,.15); }
 .saved-doc {
   display: flex; align-items: center; gap: 12px;
   background: rgba(255,255,255,.06);
@@ -100,11 +103,20 @@ body { min-height: 100dvh; }
   padding: 12px 14px;
   margin-bottom: 8px;
   cursor: pointer;
+  position: relative;
 }
 .saved-doc .dn { font-size: .82rem; font-weight: 600; flex: 1; }
 .saved-doc .dd { color: #9ca3af; font-size: .74rem; margin-top: 3px; }
 .saved-doc .count { font-size: .72rem; font-weight: 700; background: linear-gradient(135deg,#6366f1,#8b5cf6); border-radius: 20px; padding: 4px 10px; }
 .saved-doc:active { background: rgba(255,255,255,.12); }
+.saved-doc .del-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(248,113,113,.15); color: #f87171;
+  font-size: .95rem; font-weight: 700; cursor: pointer; display: grid; place-items: center; flex-shrink: 0;
+  transition: background .15s;
+}
+.saved-doc .del-btn:active { background: rgba(248,113,113,.35); }
+.confirm-body { font-size: .88rem; line-height: 1.6; color: #e5e7eb; margin-bottom: 6px; }
+.confirm-body b { color: #f87171; }
 
 /* ---------- SCRIPTS ---------- */
 #screen-scripts { background: radial-gradient(120% 60% at 50% 0%, #1f1b3d 0%, #0f0c29 60%); padding: calc(20px + env(safe-area-inset-top)) 14px 40px; }
@@ -559,7 +571,10 @@ body { min-height: 100dvh; }
     </div>
 
     <div class="saved-docs" id="saved-docs-wrap" style="display:none">
-      <h3>Roteiros salvos no aparelho</h3>
+      <div class="saved-docs-head">
+        <h3>Roteiros salvos no aparelho</h3>
+        <button class="clear-all" id="btn-clear-all">Limpar tudo</button>
+      </div>
       <div id="saved-docs"></div>
     </div>
   </section>
@@ -683,6 +698,18 @@ body { min-height: 100dvh; }
       <button class="mbtn green" id="btn-rerecord">Gravar novamente</button>
       <button class="mbtn" id="btn-next">Gravar próximo roteiro</button>
       <button class="mbtn ghost" id="btn-rec-close">Voltar aos roteiros</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL CONFIRMAR LIMPEZA ============ -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h2 id="confirm-title">Tem certeza?</h2>
+    <div class="confirm-body" id="confirm-body"></div>
+    <div class="mbtns">
+      <button class="mbtn" id="confirm-yes" style="background: linear-gradient(135deg,#ef4444,#dc2626);">Sim, apagar</button>
+      <button class="mbtn ghost" id="confirm-no">Cancelar</button>
     </div>
   </div>
 </div>
@@ -912,11 +939,13 @@ body { min-height: 100dvh; }
       return '<div class="saved-doc" data-i="' + i + '">' +
         '<div class="count">' + label + '</div>' +
         '<div class="dn">Link ' + (docs.length - i) + '<div class="dd">' + when.toLocaleDateString('pt-BR') + ' · ' + when.toLocaleTimeString('pt-BR').slice(0, 5) + '</div></div>' +
+        '<button class="del-btn" data-d="' + i + '" title="Apagar">&times;</button>' +
         '</div>';
     }).join('');
     var els = savedDocsEl.querySelectorAll('.saved-doc');
     for (var i = 0; i < els.length; i++) {
-      els[i].addEventListener('click', function () {
+      els[i].addEventListener('click', function (ev) {
+        if (ev.target.closest('.del-btn')) return;
         var d = docs[parseInt(this.dataset.i, 10)];
         if (d && d.scripts) {
           state.doc = d.scripts;
@@ -925,7 +954,54 @@ body { min-height: 100dvh; }
         }
       });
     }
+    var delBtns = savedDocsEl.querySelectorAll('.del-btn');
+    for (var j = 0; j < delBtns.length; j++) {
+      delBtns[j].addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        deleteSavedDoc(parseInt(this.dataset.d, 10));
+      });
+    }
   }
+
+  function deleteSavedDoc(i) {
+    var docs = getSavedDocs();
+    if (!docs[i]) return;
+    var d = docs[i];
+    var count = d.count || '?';
+    showConfirm('Apagar este roteiro?', 'Vai apagar o roteiro <b>0' + count + '</b> salvo no aparelho. Esta ação não pode ser desfeita.', function () {
+      docs.splice(i, 1);
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(docs)); } catch (e) {}
+      renderSaved();
+      toast('Roteiro apagado');
+    });
+  }
+
+  function showConfirm(title, bodyHtml, onYes) {
+    $('confirm-title').textContent = title;
+    $('confirm-body').innerHTML = bodyHtml;
+    $('confirm-modal').classList.add('visible');
+    $('confirm-yes').onclick = function () {
+      $('confirm-modal').classList.remove('visible');
+      if (onYes) onYes();
+    };
+    $('confirm-no').onclick = function () { $('confirm-modal').classList.remove('visible'); };
+    $('confirm-modal').addEventListener('click', function handler(ev) {
+      if (ev.target === $('confirm-modal')) {
+        $('confirm-modal').classList.remove('visible');
+        $('confirm-modal').removeEventListener('click', handler);
+      }
+    });
+  }
+
+  $('btn-clear-all').addEventListener('click', function () {
+    var docs = getSavedDocs();
+    if (docs.length === 0) { toast('Nenhum roteiro salvo'); return; }
+    showConfirm('Apagar tudo?', 'Vai apagar <b>TODOS os ' + docs.length + ' roteiros</b> salvos no aparelho. Esta ação não pode ser desfeita.', function () {
+      try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+      renderSaved();
+      toast('Todos os roteiros foram apagados');
+    });
+  });
 
   /* ---------- Scripts list ---------- */
   function openScripts(scripts) {
