@@ -24,17 +24,31 @@ Todo o processamento intermediário roda em **meia resolução** (metade do quad
 
 | Parâmetro | Local | Efeito |
 |---|---|---|
-| `state.beautyLevel` (0–100) | slider `#beauty-range` | Intensidade geral (alfa da máscara) |
+| `state.beautyLevel` (0–100) | slider `#beauty-range` | Intensidade geral; **100% equivale a 40% real** (`MAX_BEAUTY`) |
 | `state.beautyOn` (bool) | botão `#btn-beauty` | Liga/desliga |
-| `skinBlur` | `applyBeauty()` | Raio do blur da pele (auto, 3–12px em meia resolução, ∝ largura do rosto) |
-| `feather` | `applyBeauty()` | Suavidade da borda da máscara (auto, 2–10px) |
-| `brightness` do overlay ~`1 + 0.06*intensity` | `applyBeauty()` | Clareamento natural do tom (não artificial) |
-| `saturate` ~`1 - 0.05*intensity` | `applyBeauty()` | Reduz leve saturação para uniformizar manchas |
-| Olheiras `0.65*intensity` (máx. 0.9) | overlay `smEye` | Clareamento da área sob os olhos |
+| `MAX_BEAUTY` (0.4) | constante no topo | Teto da força — evita "efeito plástico" |
+| `skinBlur` | `applyBeauty()` | Raio do blur sutil, auto 2–6px em meia resolução, escala com o slider |
+| `feather` | `applyBeauty()` | Suavidade da borda da máscara (auto, 2–6px) |
+| `brightness` ~`1 + 0.03*strength` | `applyBeauty()` | Clareamento natural bem leve |
+| `saturate` ~`1 - 0.045*strength` | `applyBeauty()` | Uniformização leve de manchas |
+| Olheiras `0.45*strength` (máx. 0.5) | overlay `smEye` | Clareamento sutil abaixo dos olhos |
 | Cadência de detecção | `detTick % 5` + `>140ms` | ~5 detecções/segundo |
 | Detecção (resolução) | `ensureBeautySizes()` `dW = 480` | Reduz custo da inferência |
 
-Ajustes de "look" (mais/menos forte) ficam em `applyBeauty()`; a intensidade do usuário multiplica todas as camadas.
+## Máscara seletiva (onde o efeito atua)
+
+A suavização é aplicada **apenas** em **testa, bochechas e queixo**:
+
+- **Contorno do rosto**: oval interna recuada 7% em direção ao centro → cabelo, maxilar e queixo-linha ficam nítidos.
+- **Excluídos da máscara** (`carveBeautyRegions`): olhos + sobrancelhas, **nariz** (ponte e narinas, `noseGeom`), e **lábios** (contorno da boca com margem extra para o sorriso).
+- A textura da pele permanece: como a mescla máxima é 40%, ~60% do quadro original (poros, textura) é mantido dentro da própria máscara.
+
+## Como testar a intensidade
+
+1. Aperte **⚙⚙ → Beleza** e mova o slider **em tempo real** enquanto olha a prévia.
+2. **0%** = desligado. **25–30%** = maquiagem leve (padrão sugerido). **50%** = uniforme, ainda natural. **100%** = visível, porém abaixo do "plástico".
+3. O botão ✨ liga/desliga o recurso; se você quiser comparar, desligue e ligue para ver antes/depois na própria prévia.
+4. Grave um roteiro curto e confira no arquivo: **o que você vê ao vivo é o que grava**.
 
 ## Notas de performance e limitações
 
