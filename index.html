@@ -37,7 +37,8 @@ body { min-height: 100dvh; }
 }
 
 .brand { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 26px; }
-.brand .logo { font-size: 2.6rem; filter: drop-shadow(0 6px 18px rgba(139,92,246,.45)); }
+.brand .logo { filter: drop-shadow(0 6px 18px rgba(139,92,246,.45)); }
+.brand .logo img { display: block; width: 92px; height: 92px; border-radius: 22px; }
 .brand h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: .5px; margin-top: 6px; background: linear-gradient(90deg,#a5b4fc,#c4b5fd,#f0abfc); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .brand p { color: #9ca3af; font-size: .84rem; margin-top: 6px; line-height: 1.5; }
 
@@ -554,7 +555,7 @@ body { min-height: 100dvh; }
   <!-- ============ HOME ============ -->
   <section id="screen-home" class="screen active">
     <div class="brand">
-      <div class="logo">&#127916;</div>
+      <div class="logo"><img src="app-icon.svg" alt="TelePrompT" width="92" height="92"></div>
       <h1>TelePrompT</h1>
       <p>Cole o link do Google Docs com seus roteiros.<br>O app separa tudo e você já grava.</p>
       <button class="install-pill" id="btn-install">&#11015; Instalar app no celular</button>

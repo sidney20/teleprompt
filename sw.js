@@ -1,10 +1,11 @@
-const CACHE = 'teleprompt-v17';
+const CACHE = 'teleprompt-v18';
 const ASSETS = [
   './',
   './index.html',
   './parser.js',
   './manifest.webmanifest',
   './icon.svg',
+  './app-icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './vendor/rnnoise.js',
