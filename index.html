@@ -1480,11 +1480,11 @@ body { min-height: 100dvh; }
 
   function ensureBeautySizes(w, h) {
     if (!detCanvas) { detCanvas = document.createElement('canvas'); detCtx = detCanvas.getContext('2d'); }
-    var dW = 480;
-    var dH = Math.max(2, Math.round(480 * h / w));
+    var dW = 320;
+    var dH = Math.max(2, Math.round(320 * h / w));
     if (detCanvas.width !== dW || detCanvas.height !== dH) { detCanvas.width = dW; detCanvas.height = dH; }
-    var hw = Math.max(2, Math.round(w / 2));
-    var hh = Math.max(2, Math.round(h / 2));
+    var hw = Math.max(2, Math.round(w / 4));
+    var hh = Math.max(2, Math.round(h / 4));
     if (!smFace || smFace.width !== hw || smFace.height !== hh) {
       smFace = document.createElement('canvas'); smFace.width = hw; smFace.height = hh;
       smFaceCtx = smFace.getContext('2d');
@@ -1577,8 +1577,8 @@ body { min-height: 100dvh; }
     var gx = function (i) { return lm[i].x * hw; };
     var gy = function (i) { return lm[i].y * hh; };
     var faceW = Math.abs(gx(234) - gx(454)) || 10;
-    var skinBlur = Math.max(2, Math.min(6, faceW * 0.010)) * (0.55 + 0.45 * slider);
-    var feather = Math.max(2, Math.min(6, faceW * 0.008));
+    var skinBlur = Math.max(1, Math.min(4, faceW * 0.02)) * (0.6 + 0.4 * slider);
+    var feather = Math.max(1, Math.min(4, faceW * 0.016));
 
     var s = smFaceCtx;
     s.save();
@@ -1688,10 +1688,17 @@ body { min-height: 100dvh; }
     if (state.composeRaf) { cancelAnimationFrame(state.composeRaf); state.composeRaf = null; }
     if (!state.textInVideo && !state.recording && !(state.beautyOn && state.beautyLevel > 0)) return;
     var lastT = performance.now();
+    var skip = 0;
     function draw(now) {
       if (now - lastT >= 33) {
-        lastT = now;
-        drawCompose();
+        if (skip > 0) { skip--; }
+        else {
+          var t0 = performance.now();
+          drawCompose();
+          var cost = performance.now() - t0;
+          lastT = now;
+          if (cost > 42) skip = Math.min(4, Math.max(1, Math.ceil(cost / 33) - 1));
+        }
       }
       state.composeRaf = requestAnimationFrame(draw);
     }
@@ -1714,7 +1721,7 @@ body { min-height: 100dvh; }
     ctx.restore();
     if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
     detTick++;
-    if (state.beautyOn && state.beautyLevel > 0 && detTick % 5 === 0 && performance.now() - lastDetectT > 140) {
+    if (state.beautyOn && state.beautyLevel > 0 && detTick % 6 === 0 && performance.now() - lastDetectT > 180) {
       runDetection();
     }
   }

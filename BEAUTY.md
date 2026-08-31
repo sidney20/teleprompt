@@ -32,8 +32,8 @@ Todo o processamento intermediário roda em **meia resolução** (metade do quad
 | `brightness` ~`1 + 0.03*strength` | `applyBeauty()` | Clareamento natural bem leve |
 | `saturate` ~`1 - 0.045*strength` | `applyBeauty()` | Uniformização leve de manchas |
 | Olheiras `0.45*strength` (máx. 0.5) | overlay `smEye` | Clareamento sutil abaixo dos olhos |
-| Cadência de detecção | `detTick % 5` + `>140ms` | ~5 detecções/segundo |
-| Detecção (resolução) | `ensureBeautySizes()` `dW = 480` | Reduz custo da inferência |
+| Cadência de detecção | `detTick % 6` + `>180ms` | ~5 detecções/segundo |
+| Detecção (resolução) | `ensureBeautySizes()` `dW = 320` | Baixo custo de inferência |
 
 ## Máscara seletiva (onde o efeito atua)
 
@@ -50,9 +50,14 @@ A suavização é aplicada **apenas** em **testa, bochechas e queixo**:
 3. O botão ✨ liga/desliga o recurso; se você quiser comparar, desligue e ligue para ver antes/depois na própria prévia.
 4. Grave um roteiro curto e confira no arquivo: **o que você vê ao vivo é o que grava**.
 
-## Notas de performance e limitações
+## Notas de performance
 
-- Detecção feita a cada ~5º quadro com suavização entre detecções → foco em FPS.
+- Detecção feita a cada ~6º quadro em resolução de 320px (baixo custo), com detecção **temporizada** para não roubar frames do roteiro.
+- Todo o processamento de pele roda em **¼ da resolução** do quadro (metade do anterior) → ~4–5x menos GPU, mesma suavidade final.
+- O loop de composição é **adaptativo**: se um frame demorar >42ms, o próximo é pulado (máx. 4 seguidos) → mantém o scroll do roteiro fluido mesmo em aparelhos mais fracos.
+
+## Limitações
+
 - Se o rosto sumir por ~2s, o efeito é desativado até nova detecção (nunca "trava" numa máscara velha).
 - `Math.hypot` e `ctx.ellipse` exigem navegadores modernos (Chrome/Android e Safari recentes OK).
 - `delegate: GPU` usa WebGL do MediaPipe; se falhar, cai para `CPU` automaticamente.
