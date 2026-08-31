@@ -731,7 +731,8 @@ body { min-height: 100dvh; }
   var detCanvas = null, detCtx = null;
   var smFace = null, smFaceCtx = null, smEye = null, smEyeCtx = null;
   var HMGS = { hw: 0, hh: 0 };
-  var MAX_BEAUTY = 0.4;
+  var MAX_BEAUTY = 0.5;
+  var gb = null;
 
   var state = {
     doc: null,
@@ -765,6 +766,7 @@ body { min-height: 100dvh; }
     beautyOn: false,
     beautyLevel: 30,
     face: null,
+    faceS: null,
     faceAge: 0
   };
 
@@ -1517,6 +1519,174 @@ body { min-height: 100dvh; }
     }
   }
 
+  /* ---------- Beauty WebGL (bilateral filter via shader) ---------- */
+  function initBeautyGL() {
+    if (gb) return gb;
+    var cv = document.createElement('canvas');
+    var opt = { alpha: true, antialias: false, depth: false, stencil: false };
+    var gl = cv.getContext('webgl', opt) || cv.getContext('experimental-webgl', opt);
+    if (!gl) return null;
+    var V = 'attribute vec2 aPos; varying vec2 vUv; void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }';
+    var F = 'precision mediump float; varying vec2 vUv; uniform sampler2D uFrame; uniform sampler2D uMask; uniform vec2 uRes; uniform float uRadius; uniform float uSigma; uniform float uSigmaCol; uniform float uIntensity; void main(){ vec4 c = texture2D(uFrame, vUv); vec3 acc = vec3(0.0); float wsum = 0.0; for (int y = -4; y <= 4; y++) { for (int x = -4; x <= 4; x++) { float dx = float(x); float dy = float(y); float d2 = dx*dx + dy*dy; if (d2 > uRadius*uRadius) continue; vec3 s = texture2D(uFrame, vUv + vec2(dx, dy)/uRes).rgb; float sw = exp(-d2/(2.0*uSigma*uSigma)); float cd = dot(s - c.rgb, s - c.rgb); float cw = exp(-cd/(2.0*uSigmaCol*uSigmaCol)); float w = sw*cw; acc += s*w; wsum += w; } } vec3 smooth = acc/max(wsum, 1e-5); float m = texture2D(uMask, vUv).a; float k = m * uIntensity; vec3 outCol = mix(c.rgb, smooth, k); outCol *= 1.0 + 0.025*k; gl_FragColor = vec4(outCol, 1.0); }';
+    function compile(type, src) {
+      var sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { gl.deleteShader(sh); return null; }
+      return sh;
+    }
+    var vs = compile(gl.VERTEX_SHADER, V);
+    var fs = compile(gl.FRAGMENT_SHADER, F);
+    if (!vs || !fs) { if (vs) gl.deleteShader(vs); if (fs) gl.deleteShader(fs); return null; }
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.bindAttribLocation(prog, 0, 'aPos');
+    gl.linkProgram(prog);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    var u = {
+      frame: gl.getUniformLocation(prog, 'uFrame'),
+      mask: gl.getUniformLocation(prog, 'uMask'),
+      res: gl.getUniformLocation(prog, 'uRes'),
+      radius: gl.getUniformLocation(prog, 'uRadius'),
+      sigma: gl.getUniformLocation(prog, 'uSigma'),
+      sigmaCol: gl.getUniformLocation(prog, 'uSigmaCol'),
+      intensity: gl.getUniformLocation(prog, 'uIntensity')
+    };
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    var maskCv = document.createElement('canvas');
+    var g = {
+      cv: cv, gl: gl, prog: prog, u: u,
+      texFrame: gl.createTexture(), texMask: gl.createTexture(),
+      buf: buf, maskCv: maskCv, maskCtx: maskCv.getContext('2d'),
+      fw: 0, fh: 0, tier: 0, probe: 0, acc: 0
+    };
+    cv.addEventListener('webglcontextlost', function (e) { e.preventDefault(); gb = null; });
+    gb = g;
+    return g;
+  }
+
+  function setupTextureSampler(gl, tex, w, h, src) {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (src) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  }
+
+  function uploadFrameTexture(g, w, h) {
+    var gl = g.gl;
+    gl.bindTexture(gl.TEXTURE_2D, g.texFrame);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (g.fw !== w || g.fh !== h) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      g.fw = w; g.fh = h;
+    }
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, cam);
+  }
+
+  function fillSkinOval(ctx2, lm, hw, hh) {
+    var ccx = 0, ccy = 0;
+    for (var ki = 0; ki < FACE_OVAL.length; ki++) { ccx += lm[FACE_OVAL[ki]].x; ccy += lm[FACE_OVAL[ki]].y; }
+    ccx /= FACE_OVAL.length; ccy /= FACE_OVAL.length;
+    var inset = 0.07;
+    ctx2.fillStyle = '#ffffff';
+    ctx2.beginPath();
+    for (var k = 0; k < FACE_OVAL.length; k++) {
+      var px = (ccx + (lm[FACE_OVAL[k]].x - ccx) * (1 - inset)) * hw;
+      var py = (ccy + (lm[FACE_OVAL[k]].y - ccy) * (1 - inset)) * hh;
+      if (k === 0) ctx2.moveTo(px, py);
+      else ctx2.lineTo(px, py);
+    }
+    ctx2.closePath();
+    ctx2.fill();
+  }
+
+  function uploadMaskTexture(g, lm, vw, vh) {
+    var mw = 192;
+    var mh = Math.max(2, Math.round(192 * vh / vw));
+    var cv = g.maskCv, c2 = g.maskCtx;
+    if (cv.width !== mw || cv.height !== mh) { cv.width = mw; cv.height = mh; }
+    c2.clearRect(0, 0, mw, mh);
+    c2.filter = 'blur(1px)';
+    fillSkinOval(c2, lm, mw, mh);
+    c2.globalCompositeOperation = 'destination-out';
+    c2.fillStyle = '#000000';
+    carveBeautyRegions(c2, lm, mw, mh);
+    c2.globalCompositeOperation = 'source-over';
+    c2.fillStyle = 'rgba(255,255,255,0.45)';
+    drawUnderEyes(c2, lm, mw, mh);
+    c2.filter = 'none';
+    g.gl.pixelStorei(g.gl.UNPACK_FLIP_Y_WEBGL, true);
+    setupTextureSampler(g.gl, g.texMask, mw, mh, cv);
+  }
+
+  function lerpFace() {
+    var f = state.face;
+    if (!f) { state.faceS = null; return; }
+    var s = state.faceS;
+    if (!s || s.length !== f.length) {
+      state.faceS = f.map(function (p) { return { x: p.x, y: p.y }; });
+      return;
+    }
+    for (var i = 0; i < f.length; i++) {
+      if (f[i] && s[i]) { s[i].x += (f[i].x - s[i].x) * 0.3; s[i].y += (f[i].y - s[i].y) * 0.3; }
+    }
+  }
+
+  function applyBeautyGL(ctx, w, h, lm) {
+    var t0 = performance.now();
+    var g = gb;
+    var vw = cam.videoWidth, vh = cam.videoHeight;
+    if (vw <= 0 || vh <= 0) return;
+    var div = g.tier < 2 ? 2 : 4;
+    var bw = Math.max(2, Math.round(vw / div));
+    var bh = Math.max(2, Math.round(vh / div));
+    if (g.cv.width !== bw || g.cv.height !== bh) { g.cv.width = bw; g.cv.height = bh; g.gl.viewport(0, 0, bw, bh); }
+    uploadFrameTexture(g, vw, vh);
+    uploadMaskTexture(g, lm, vw, vh);
+    var gl = g.gl;
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.useProgram(g.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, g.buf);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, g.texFrame);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, g.texMask);
+    var u = g.u;
+    gl.uniform1i(u.frame, 0);
+    gl.uniform1i(u.mask, 1);
+    gl.uniform2f(u.res, bw, bh);
+    gl.uniform1f(u.radius, g.tier === 0 ? 3 : 2);
+    gl.uniform1f(u.sigma, 3.0);
+    gl.uniform1f(u.sigmaCol, 0.13);
+    gl.uniform1f(u.intensity, MAX_BEAUTY * (state.beautyLevel / 100));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
+    ctx.drawImage(g.cv, 0, 0, w, h);
+    var cost = performance.now() - t0;
+    g.acc += cost; g.probe++;
+    if (g.probe >= 30) {
+      var avg = g.acc / g.probe;
+      if (avg > 42 && g.tier < 2) g.tier++;
+      else if (avg < 18 && g.tier > 0) g.tier--;
+      g.probe = 0; g.acc = 0;
+    }
+  }
+
   function eyeGeom(lm, hw, hh, side) {
     var o = lm[side === 'R' ? 33 : 362];
     var i = lm[side === 'R' ? 133 : 263];
@@ -1566,8 +1736,15 @@ body { min-height: 100dvh; }
   }
 
   function applyBeauty(ctx, w, h) {
-    var lm = state.face;
+    lerpFace();
+    var lm = state.faceS || state.face;
     if (!lm) return;
+    if (!gb) gb = initBeautyGL();
+    if (gb) { applyBeautyGL(ctx, w, h, lm); return; }
+    cpuBeauty(ctx, w, h, lm);
+  }
+
+  function cpuBeauty(ctx, w, h, lm) {
     ensureBeautySizes(w, h);
     var hw = HMGS.hw, hh = HMGS.hh;
     var slider = state.beautyLevel / 100;
@@ -1589,20 +1766,7 @@ body { min-height: 100dvh; }
     s.globalCompositeOperation = 'destination-in';
     s.filter = 'blur(' + feather.toFixed(2) + 'px)';
     s.globalAlpha = strength;
-    s.fillStyle = '#ffffff';
-    s.beginPath();
-    var ccx = 0, ccy = 0;
-    for (var ki = 0; ki < FACE_OVAL.length; ki++) { ccx += lm[FACE_OVAL[ki]].x; ccy += lm[FACE_OVAL[ki]].y; }
-    ccx /= FACE_OVAL.length; ccy /= FACE_OVAL.length;
-    var inset = 0.07;
-    for (var k = 0; k < FACE_OVAL.length; k++) {
-      var px = ccx + (lm[FACE_OVAL[k]].x - ccx) * (1 - inset);
-      var py = ccy + (lm[FACE_OVAL[k]].y - ccy) * (1 - inset);
-      if (k === 0) s.moveTo(px * hw, py * hh);
-      else s.lineTo(px * hw, py * hh);
-    }
-    s.closePath();
-    s.fill();
+    fillSkinOval(s, lm, hw, hh);
     s.globalAlpha = 1;
     s.globalCompositeOperation = 'destination-out';
     s.fillStyle = '#000000';
@@ -1721,7 +1885,7 @@ body { min-height: 100dvh; }
     ctx.restore();
     if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
     detTick++;
-    if (state.beautyOn && state.beautyLevel > 0 && detTick % 6 === 0 && performance.now() - lastDetectT > 180) {
+    if (state.beautyOn && state.beautyLevel > 0 && detTick % 3 === 0 && performance.now() - lastDetectT > 110) {
       runDetection();
     }
   }

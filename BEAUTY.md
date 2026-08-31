@@ -32,7 +32,7 @@ Todo o processamento intermediário roda em **meia resolução** (metade do quad
 | `brightness` ~`1 + 0.03*strength` | `applyBeauty()` | Clareamento natural bem leve |
 | `saturate` ~`1 - 0.045*strength` | `applyBeauty()` | Uniformização leve de manchas |
 | Olheiras `0.45*strength` (máx. 0.5) | overlay `smEye` | Clareamento sutil abaixo dos olhos |
-| Cadência de detecção | `detTick % 6` + `>180ms` | ~5 detecções/segundo |
+| Cadência de detecção | `detTick % 3` + `>110ms` | ~10 detecções/seg + interpolação |
 | Detecção (resolução) | `ensureBeautySizes()` `dW = 320` | Baixo custo de inferência |
 
 ## Máscara seletiva (onde o efeito atua)
@@ -49,6 +49,13 @@ A suavização é aplicada **apenas** em **testa, bochechas e queixo**:
 2. **0%** = desligado. **25–30%** = maquiagem leve (padrão sugerido). **50%** = uniforme, ainda natural. **100%** = visível, porém abaixo do "plástico".
 3. O botão ✨ liga/desliga o recurso; se você quiser comparar, desligue e ligue para ver antes/depois na própria prévia.
 4. Grave um roteiro curto e confira no arquivo: **o que você vê ao vivo é o que grava**.
+
+## Processamento (WebGL)
+
+- O efeito roda via **WebGL com shader bilateral (GLSL)**: suaviza apenas pixels de cor similar (`uSigmaCol = 0.13`) e distância (`uSigmaSpace = 3.0`), **preservando bordas** (olhos, lábios, contornos) em vez de borrar tudo.
+- A máscara seletiva (testa/bochechas/queixo) é a textura `uMask`, alimentada pelos landmarks do MediaPipe (inferência ~10fps + **interpolação de landmarks** a cada frame → movimento suave equivalente a tracking de alta taxa).
+- Passes no shader: bilateral → brilho leve (`0.025`) → mix com o original conforme intensidade.
+- **Qualidade adaptativa**: 3 níveis (`div` 2/4 × raio 3/2) ajustados automaticamente pelas medições de FPS; se o WebGL falhar (ou contexto perdido), cai para o pipeline Canvas2D.
 
 ## Notas de performance
 
