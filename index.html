@@ -174,7 +174,6 @@ body { min-height: 100dvh; }
 #screen-reader { position: relative; overflow: hidden; background: #000; }
 
 #cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-#live-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none; }
 
 #reading-wrap {
   position: absolute;
@@ -355,11 +354,6 @@ body { min-height: 100dvh; }
   margin-bottom: 14px;
 }
 .btn-filters:active { transform: scale(.98); }
-
-.beauty-box { margin-bottom: 14px; }
-.beauty-toggle { width: 100%; }
-#beauty-slider-row.off { opacity: .45; }
-#beauty-slider-row .sl-val { min-width: 44px; text-align: right; }
 
 /* Filtro de efeito - tela cheia */
 #filter-modal {
@@ -567,7 +561,6 @@ body { min-height: 100dvh; }
   <!-- ============ READER ============ -->
   <section id="screen-reader" class="screen">
     <video id="cam" playsinline autoplay muted></video>
-    <canvas id="live-canvas"></canvas>
 
     <div id="reading-wrap">
       <div id="scroll-content"></div>
@@ -628,14 +621,6 @@ body { min-height: 100dvh; }
       <span class="sl-val" id="size-val">26</span>
     </div>
     <button class="btn-filters" id="btn-filters"><span class="ic">&#127912;</span>Filtro de efeito</button>
-    <div class="beauty-box">
-      <button class="tool-btn beauty-toggle" id="btn-beauty"><span class="ic">&#10024;</span>Beleza</button>
-      <div class="sl-row cfg-size" id="beauty-slider-row">
-        <label>Intensidade</label>
-        <input type="range" id="beauty-range" min="0" max="100" step="1" value="30">
-        <span class="sl-val" id="beauty-val">30%</span>
-      </div>
-    </div>
     <div class="mbtns">
       <button class="mbtn" id="cfg-close">Concluído</button>
     </div>
@@ -721,19 +706,6 @@ body { min-height: 100dvh; }
     { label: 'Gelo', css: 'saturate(0.95) hue-rotate(12deg) brightness(1.06)' }
   ];
 
-  var FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
-
-  var faceLM = null;
-  var beautyLoadP = null;
-  var faceTs = 0;
-  var lastDetectT = -999;
-  var detTick = 0;
-  var detCanvas = null, detCtx = null;
-  var smFace = null, smFaceCtx = null, smEye = null, smEyeCtx = null;
-  var HMGS = { hw: 0, hh: 0 };
-  var MAX_BEAUTY = 0.5;
-  var gb = null;
-
   var state = {
     doc: null,
     idx: 0,
@@ -762,12 +734,7 @@ body { min-height: 100dvh; }
     voiceNodes: null,
     canvasStream: null,
     readH: 0.46,
-    filterId: 0,
-    beautyOn: false,
-    beautyLevel: 30,
-    face: null,
-    faceS: null,
-    faceAge: 0
+    filterId: 0
   };
 
   function loadSettings() {
@@ -781,9 +748,6 @@ body { min-height: 100dvh; }
       if (s.facing) state.facing = s.facing;
       if (typeof s.readH === 'number') state.readH = Math.max(0.18, Math.min(0.93, s.readH));
       if (typeof s.filter === 'number' && s.filter >= 0 && s.filter < FILTERS.length) state.filterId = s.filter;
-      if (typeof s.beautyOn === 'boolean') state.beautyOn = s.beautyOn;
-      var bl = parseInt(s.beautyLevel, 10);
-      if (!isNaN(bl) && bl >= 0 && bl <= 100) state.beautyLevel = bl;
     } catch (e) {}
   }
   function saveSettings() {
@@ -796,9 +760,7 @@ body { min-height: 100dvh; }
         voice: state.voiceOn,
         facing: state.facing,
         readH: state.readH,
-        filter: state.filterId,
-        beautyOn: state.beautyOn,
-        beautyLevel: state.beautyLevel
+        filter: state.filterId
       }));
     } catch (e) {}
   }
@@ -1010,7 +972,6 @@ body { min-height: 100dvh; }
     timerEl.textContent = '00:00';
     updateControlLabels();
     showScreen('reader');
-    syncBeautyCanvas();
     applyReadHeight();
     buildLines();
     setScrollState(0, false);
@@ -1357,7 +1318,6 @@ body { min-height: 100dvh; }
   function applyMirror() {
     var m = state.facing === 'user' ? 'scaleX(-1)' : 'none';
     cam.style.transform = m;
-    $('live-canvas').style.transform = m;
   }
 
   $('btn-flip').addEventListener('click', function () {
@@ -1451,406 +1411,26 @@ body { min-height: 100dvh; }
     applyFilter();
   });
 
-  /* ---------- Beauty: filtro de beleza (MediaPipe Face Landmarker) ---------- */
-  function loadBeauty() {
-    if (beautyLoadP) return beautyLoadP;
-    beautyLoadP = import('./vendor/tasks-vision.mjs').then(function (mod) {
-      return mod.FilesetResolver.forVisionTasks('vendor/wasm').then(function (vision) {
-        var make = function (delegate) {
-          return mod.FaceLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath: 'vendor/face_landmarker.task', delegate: delegate },
-            runningMode: 'VIDEO',
-            numFaces: 1,
-            minFaceDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5,
-            outputFaceBlendshapes: false,
-            outputFacialTransformationMatrixes: false
-          });
-        };
-        return make('GPU').catch(function () { return make('CPU'); });
-      });
-    }).then(function (fl) {
-      faceLM = fl;
-      return fl;
-    }).catch(function () {
-      beautyLoadP = null;
-      toast('Detecção de rosto indisponível neste aparelho');
-      return null;
-    });
-    return beautyLoadP;
-  }
-
-  function ensureBeautySizes(w, h) {
-    if (!detCanvas) { detCanvas = document.createElement('canvas'); detCtx = detCanvas.getContext('2d'); }
-    var dW = 320;
-    var dH = Math.max(2, Math.round(320 * h / w));
-    if (detCanvas.width !== dW || detCanvas.height !== dH) { detCanvas.width = dW; detCanvas.height = dH; }
-    var hw = Math.max(2, Math.round(w / 4));
-    var hh = Math.max(2, Math.round(h / 4));
-    if (!smFace || smFace.width !== hw || smFace.height !== hh) {
-      smFace = document.createElement('canvas'); smFace.width = hw; smFace.height = hh;
-      smFaceCtx = smFace.getContext('2d');
-      smEye = document.createElement('canvas'); smEye.width = hw; smEye.height = hh;
-      smEyeCtx = smEye.getContext('2d');
-    }
-    HMGS.hw = hw; HMGS.hh = hh;
-  }
-
-  function runDetection() {
-    if (!faceLM || !state.stream || cam.videoWidth <= 0) return;
-    lastDetectT = performance.now();
-    var vw = cam.videoWidth, vh = cam.videoHeight;
-    ensureBeautySizes(vw, vh);
-    detCtx.drawImage(cam, 0, 0, detCanvas.width, detCanvas.height);
-    var ts = Math.floor(performance.now());
-    if (ts <= faceTs) ts = faceTs + 1;
-    faceTs = ts;
-    var lm = null;
-    try {
-      var res = faceLM.detectForVideo(detCanvas, ts);
-      if (res && res.faceLandmarks && res.faceLandmarks.length) lm = res.faceLandmarks[0];
-    } catch (e2) {}
-    if (lm && lm.length >= 468) {
-      state.face = lm;
-      state.faceAge = 0;
-    } else {
-      state.faceAge++;
-      if (state.faceAge > 14) state.face = null;
-    }
-  }
-
-  /* ---------- Beauty WebGL (bilateral filter via shader) ---------- */
-  function initBeautyGL() {
-    if (gb) return gb;
-    var cv = document.createElement('canvas');
-    var opt = { alpha: true, antialias: false, depth: false, stencil: false };
-    var gl = cv.getContext('webgl', opt) || cv.getContext('experimental-webgl', opt);
-    if (!gl) return null;
-    var V = 'attribute vec2 aPos; varying vec2 vUv; void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }';
-    var F = 'precision mediump float; varying vec2 vUv; uniform sampler2D uFrame; uniform sampler2D uMask; uniform vec2 uRes; uniform float uRadius; uniform float uSigma; uniform float uSigmaCol; uniform float uIntensity; void main(){ vec4 c = texture2D(uFrame, vUv); vec3 acc = vec3(0.0); float wsum = 0.0; for (int y = -4; y <= 4; y++) { for (int x = -4; x <= 4; x++) { float dx = float(x); float dy = float(y); float d2 = dx*dx + dy*dy; if (d2 > uRadius*uRadius) continue; vec3 s = texture2D(uFrame, vUv + vec2(dx, dy)/uRes).rgb; float sw = exp(-d2/(2.0*uSigma*uSigma)); float cd = dot(s - c.rgb, s - c.rgb); float cw = exp(-cd/(2.0*uSigmaCol*uSigmaCol)); float w = sw*cw; acc += s*w; wsum += w; } } vec3 smooth = acc/max(wsum, 1e-5); float m = texture2D(uMask, vUv).a; float k = m * uIntensity; vec3 outCol = mix(c.rgb, smooth, k); outCol *= 1.0 + 0.025*k; gl_FragColor = vec4(outCol, 1.0); }';
-    function compile(type, src) {
-      var sh = gl.createShader(type);
-      gl.shaderSource(sh, src);
-      gl.compileShader(sh);
-      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { gl.deleteShader(sh); return null; }
-      return sh;
-    }
-    var vs = compile(gl.VERTEX_SHADER, V);
-    var fs = compile(gl.FRAGMENT_SHADER, F);
-    if (!vs || !fs) { if (vs) gl.deleteShader(vs); if (fs) gl.deleteShader(fs); return null; }
-    var prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.bindAttribLocation(prog, 0, 'aPos');
-    gl.linkProgram(prog);
-    gl.deleteShader(vs);
-    gl.deleteShader(fs);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
-    var buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    var u = {
-      frame: gl.getUniformLocation(prog, 'uFrame'),
-      mask: gl.getUniformLocation(prog, 'uMask'),
-      res: gl.getUniformLocation(prog, 'uRes'),
-      radius: gl.getUniformLocation(prog, 'uRadius'),
-      sigma: gl.getUniformLocation(prog, 'uSigma'),
-      sigmaCol: gl.getUniformLocation(prog, 'uSigmaCol'),
-      intensity: gl.getUniformLocation(prog, 'uIntensity')
-    };
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    var maskCv = document.createElement('canvas');
-    var g = {
-      cv: cv, gl: gl, prog: prog, u: u,
-      texFrame: gl.createTexture(), texMask: gl.createTexture(),
-      buf: buf, maskCv: maskCv, maskCtx: maskCv.getContext('2d'),
-      fw: 0, fh: 0, tier: 0, probe: 0, acc: 0
-    };
-    cv.addEventListener('webglcontextlost', function (e) { e.preventDefault(); gb = null; });
-    gb = g;
-    return g;
-  }
-
-  function setupTextureSampler(gl, tex, w, h, src) {
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    if (src) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-  }
-
-  function uploadFrameTexture(g, w, h) {
-    var gl = g.gl;
-    gl.bindTexture(gl.TEXTURE_2D, g.texFrame);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    if (g.fw !== w || g.fh !== h) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      g.fw = w; g.fh = h;
-    }
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, cam);
-  }
-
-  function fillSkinOval(ctx2, lm, hw, hh) {
-    var ccx = 0, ccy = 0;
-    for (var ki = 0; ki < FACE_OVAL.length; ki++) { ccx += lm[FACE_OVAL[ki]].x; ccy += lm[FACE_OVAL[ki]].y; }
-    ccx /= FACE_OVAL.length; ccy /= FACE_OVAL.length;
-    var inset = 0.07;
-    ctx2.fillStyle = '#ffffff';
-    ctx2.beginPath();
-    for (var k = 0; k < FACE_OVAL.length; k++) {
-      var px = (ccx + (lm[FACE_OVAL[k]].x - ccx) * (1 - inset)) * hw;
-      var py = (ccy + (lm[FACE_OVAL[k]].y - ccy) * (1 - inset)) * hh;
-      if (k === 0) ctx2.moveTo(px, py);
-      else ctx2.lineTo(px, py);
-    }
-    ctx2.closePath();
-    ctx2.fill();
-  }
-
-  function uploadMaskTexture(g, lm, vw, vh) {
-    var mw = 192;
-    var mh = Math.max(2, Math.round(192 * vh / vw));
-    var cv = g.maskCv, c2 = g.maskCtx;
-    if (cv.width !== mw || cv.height !== mh) { cv.width = mw; cv.height = mh; }
-    c2.clearRect(0, 0, mw, mh);
-    c2.filter = 'blur(1px)';
-    fillSkinOval(c2, lm, mw, mh);
-    c2.globalCompositeOperation = 'destination-out';
-    c2.fillStyle = '#000000';
-    carveBeautyRegions(c2, lm, mw, mh);
-    c2.globalCompositeOperation = 'source-over';
-    c2.fillStyle = 'rgba(255,255,255,0.45)';
-    drawUnderEyes(c2, lm, mw, mh);
-    c2.filter = 'none';
-    g.gl.pixelStorei(g.gl.UNPACK_FLIP_Y_WEBGL, true);
-    setupTextureSampler(g.gl, g.texMask, mw, mh, cv);
-  }
-
-  function lerpFace() {
-    var f = state.face;
-    if (!f) { state.faceS = null; return; }
-    var s = state.faceS;
-    if (!s || s.length !== f.length) {
-      state.faceS = f.map(function (p) { return { x: p.x, y: p.y }; });
-      return;
-    }
-    for (var i = 0; i < f.length; i++) {
-      if (f[i] && s[i]) { s[i].x += (f[i].x - s[i].x) * 0.3; s[i].y += (f[i].y - s[i].y) * 0.3; }
-    }
-  }
-
-  function applyBeautyGL(ctx, w, h, lm) {
-    var t0 = performance.now();
-    var g = gb;
-    var vw = cam.videoWidth, vh = cam.videoHeight;
-    if (vw <= 0 || vh <= 0) return;
-    var div = g.tier < 2 ? 2 : 4;
-    var bw = Math.max(2, Math.round(vw / div));
-    var bh = Math.max(2, Math.round(vh / div));
-    if (g.cv.width !== bw || g.cv.height !== bh) { g.cv.width = bw; g.cv.height = bh; g.gl.viewport(0, 0, bw, bh); }
-    uploadFrameTexture(g, vw, vh);
-    uploadMaskTexture(g, lm, vw, vh);
-    var gl = g.gl;
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);
-    gl.useProgram(g.prog);
-    gl.bindBuffer(gl.ARRAY_BUFFER, g.buf);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, g.texFrame);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, g.texMask);
-    var u = g.u;
-    gl.uniform1i(u.frame, 0);
-    gl.uniform1i(u.mask, 1);
-    gl.uniform2f(u.res, bw, bh);
-    gl.uniform1f(u.radius, g.tier === 0 ? 3 : 2);
-    gl.uniform1f(u.sigma, 3.0);
-    gl.uniform1f(u.sigmaCol, 0.13);
-    gl.uniform1f(u.intensity, MAX_BEAUTY * (state.beautyLevel / 100));
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
-    ctx.drawImage(g.cv, 0, 0, w, h);
-    var cost = performance.now() - t0;
-    g.acc += cost; g.probe++;
-    if (g.probe >= 30) {
-      var avg = g.acc / g.probe;
-      if (avg > 42 && g.tier < 2) g.tier++;
-      else if (avg < 18 && g.tier > 0) g.tier--;
-      g.probe = 0; g.acc = 0;
-    }
-  }
-
-  function eyeGeom(lm, hw, hh, side) {
-    var o = lm[side === 'R' ? 33 : 362];
-    var i = lm[side === 'R' ? 133 : 263];
-    var cx = (o.x + i.x) / 2 * hw;
-    var cy = (o.y + i.y) / 2 * hh;
-    var d = Math.hypot((o.x - i.x) * hw, (o.y - i.y) * hh) || 4;
-    return { cx: cx, cy: cy, rx: d * 0.9, ry: d * 0.5 };
-  }
-
-  function carveBeautyRegions(ctx, lm, hw, hh) {
-    ['R', 'L'].forEach(function (side) {
-      var g = eyeGeom(lm, hw, hh, side);
-      ctx.beginPath();
-      ctx.ellipse(g.cx, g.cy, g.rx * 1.2, g.ry * 1.15, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(g.cx, g.cy - g.ry * 2.2, g.rx * 0.95, g.ry * 0.9, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    var ng = noseGeom(lm, hw, hh);
-    ctx.beginPath();
-    ctx.ellipse(ng.cx, ng.cy, ng.rx, ng.ry, -0.15, 0, Math.PI * 2);
-    ctx.fill();
-    var mg = mouthGeom(lm, hw, hh);
-    ctx.beginPath();
-    ctx.ellipse(mg.cx, mg.cy, mg.rx * 1.05, mg.ry * 1.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function noseGeom(lm, hw, hh) {
-    var tip = lm[2], br = lm[168];
-    var nl = lm[98], nr = lm[327];
-    var cx = (tip.x + br.x) / 2 * hw;
-    var cy = (tip.y + br.y) / 2 * hh;
-    var rx = (Math.abs(nl.x - nr.x) * hw / 2) * 1.2 || 4;
-    var ry = Math.max(3, Math.abs(br.y - tip.y) * hh * 1.1);
-    return { cx: cx, cy: cy, rx: rx, ry: ry };
-  }
-
-  function drawUnderEyes(ctx, lm, hw, hh) {
-    ['R', 'L'].forEach(function (side) {
-      var g = eyeGeom(lm, hw, hh, side);
-      ctx.beginPath();
-      ctx.ellipse(g.cx, g.cy + g.ry * 1.1, g.rx * 0.95, g.ry * 0.95, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  function applyBeauty(ctx, w, h) {
-    lerpFace();
-    var lm = state.faceS || state.face;
-    if (!lm) return;
-    if (!gb) gb = initBeautyGL();
-    if (gb) { applyBeautyGL(ctx, w, h, lm); return; }
-    cpuBeauty(ctx, w, h, lm);
-  }
-
-  function cpuBeauty(ctx, w, h, lm) {
-    ensureBeautySizes(w, h);
-    var hw = HMGS.hw, hh = HMGS.hh;
-    var slider = state.beautyLevel / 100;
-    if (slider <= 0) return;
-    var strength = slider * MAX_BEAUTY;
-    if (strength <= 0.001) return;
-    var gx = function (i) { return lm[i].x * hw; };
-    var gy = function (i) { return lm[i].y * hh; };
-    var faceW = Math.abs(gx(234) - gx(454)) || 10;
-    var skinBlur = Math.max(1, Math.min(4, faceW * 0.02)) * (0.6 + 0.4 * slider);
-    var feather = Math.max(1, Math.min(4, faceW * 0.016));
-
-    var s = smFaceCtx;
-    s.save();
-    s.clearRect(0, 0, hw, hh);
-    s.globalCompositeOperation = 'source-over';
-    s.filter = 'blur(' + skinBlur.toFixed(2) + 'px) brightness(' + (1 + 0.03 * strength).toFixed(3) + ') saturate(' + (1 - 0.045 * strength).toFixed(3) + ')';
-    s.drawImage(cam, 0, 0, hw, hh);
-    s.globalCompositeOperation = 'destination-in';
-    s.filter = 'blur(' + feather.toFixed(2) + 'px)';
-    s.globalAlpha = strength;
-    fillSkinOval(s, lm, hw, hh);
-    s.globalAlpha = 1;
-    s.globalCompositeOperation = 'destination-out';
-    s.fillStyle = '#000000';
-    carveBeautyRegions(s, lm, hw, hh);
-    s.restore();
-
-    var e = smEyeCtx;
-    e.save();
-    e.clearRect(0, 0, hw, hh);
-    e.globalCompositeOperation = 'source-over';
-    e.filter = 'brightness(' + (1 + 0.08 * strength).toFixed(3) + ')';
-    e.drawImage(cam, 0, 0, hw, hh);
-    e.globalCompositeOperation = 'destination-in';
-    e.filter = 'blur(' + (feather * 1.3).toFixed(2) + 'px)';
-    e.globalAlpha = Math.min(0.5, 0.45 * strength);
-    e.fillStyle = '#ffffff';
-    drawUnderEyes(e, lm, hw, hh);
-    e.restore();
-
-    ctx.drawImage(smFace, 0, 0, w, h);
-    ctx.drawImage(smEye, 0, 0, w, h);
-  }
-
-  function mouthGeom(lm, hw, hh) {
-    var l = lm[61], r = lm[291];
-    var t = lm[13], b = lm[14];
-    var cx = (l.x + r.x) / 2 * hw;
-    var cy = (l.y + r.y) / 2 * hh;
-    var wd = Math.hypot((l.x - r.x) * hw, (l.y - r.y) * hh) || 4;
-    var ht = Math.hypot((t.x - b.x) * hw, (t.y - b.y) * hh) || (wd * 0.35);
-    return { cx: cx, cy: cy, rx: wd * 0.62, ry: Math.max(2, ht * 0.85) };
-  }
-
-  function syncBeautyCanvas() {
-    var on = state.beautyOn && state.beautyLevel > 0;
-    $('live-canvas').style.display = on && $('screen-reader').classList.contains('active') ? '' : 'none';
-  }
-
-  function applyBeautyUi() {
-    $('btn-beauty').classList.toggle('on', state.beautyOn);
-    $('beauty-slider-row').classList.toggle('off', !state.beautyOn);
-    $('beauty-range').value = state.beautyLevel;
-    $('beauty-val').textContent = state.beautyLevel + '%';
-    updateControlLabels();
-    syncBeautyCanvas();
-    if (state.beautyOn && state.beautyLevel > 0) loadBeauty();
-    ensureCompose();
-    saveSettings();
-  }
-
-  $('btn-beauty').addEventListener('click', function () {
-    if (state.recording) { toast('Pare a gravação antes de mudar'); return; }
-    state.beautyOn = !state.beautyOn;
-    applyBeautyUi();
-    toast('Beleza ' + (state.beautyOn ? 'ligado' : 'desligado'));
-  });
-
-  $('beauty-range').addEventListener('input', function () {
-    state.beautyLevel = parseInt(this.value, 10);
-    applyBeautyUi();
-  });
-
   function updateControlLabels() {
     $('btn-mirror').classList.toggle('on', state.mirror);
     $('btn-txtvideo').classList.toggle('on', state.textInVideo);
     $('btn-voice').classList.toggle('on', state.voiceOn);
     $('btn-flip').classList.toggle('on', state.facing === 'environment');
-    $('btn-beauty').classList.toggle('on', state.beautyOn);
     var parts = [];
     parts.push(state.textInVideo ? 'Texto entra na gravação.' : 'Texto só na tela para ler.');
     if (state.voiceOn) parts.push('Isolamento de voz ativo: som de fundo removido, apenas a sua voz entra.');
     else parts.push('Isolamento de voz desligado.');
-    if (state.beautyOn && state.beautyLevel > 0) parts.push('Beleza da pele ativo.');
     $('rec-info').innerHTML = parts.join(' ');
   }
 
   /* ---------- canvas ---------- */
   function initCanvas() {
-    if (!state.canvas) { state.canvas = $('live-canvas'); }
+    if (!state.canvas) { state.canvas = document.createElement('canvas'); }
   }
 
   function ensureCompose() {
     if (state.composeRaf) { cancelAnimationFrame(state.composeRaf); state.composeRaf = null; }
-    if (!state.textInVideo && !state.recording && !(state.beautyOn && state.beautyLevel > 0)) return;
+    if (!state.textInVideo && !state.recording) return;
     var lastT = performance.now();
     var skip = 0;
     function draw(now) {
@@ -1881,13 +1461,8 @@ body { min-height: 100dvh; }
     if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
     ctx.drawImage(cam, 0, 0, c.width, c.height);
     ctx.filter = 'none';
-    if (state.beautyOn && state.beautyLevel > 0) applyBeauty(ctx, c.width, c.height);
     ctx.restore();
     if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
-    detTick++;
-    if (state.beautyOn && state.beautyLevel > 0 && detTick % 3 === 0 && performance.now() - lastDetectT > 110) {
-      runDetection();
-    }
   }
 
   function drawTextOverlay(ctx, w, h) {
@@ -2094,7 +1669,6 @@ body { min-height: 100dvh; }
     cam.removeAttribute('src');
     cam.srcObject = null;
     openScripts(state.doc);
-    syncBeautyCanvas();
   }
 
   $('btn-back-scripts').addEventListener('click', backToScripts);
@@ -2134,7 +1708,6 @@ body { min-height: 100dvh; }
   loadSettings();
   applyFilter();
   initCanvas();
-  applyBeautyUi();
   renderSaved();
   secureCheck();
   registerSW();
