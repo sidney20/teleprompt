@@ -1,4 +1,4 @@
-const CACHE = 'teleprompt-v8';
+const CACHE = 'teleprompt-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,13 @@ const ASSETS = [
   './vendor/rnnoise.wasm',
   './vendor/webm-duration-fix.js',
   './vendor/int64-buffer.js',
-  './vendor/ebml-block.js'
+  './vendor/ebml-block.js',
+  './vendor/tasks-vision.mjs',
+  './vendor/face_landmarker.task',
+  './vendor/wasm/vision_wasm_internal.js',
+  './vendor/wasm/vision_wasm_internal.wasm',
+  './vendor/wasm/vision_wasm_nosimd_internal.js',
+  './vendor/wasm/vision_wasm_nosimd_internal.wasm'
 ];
 
 self.addEventListener('install', (event) => {

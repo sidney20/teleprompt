@@ -174,6 +174,7 @@ body { min-height: 100dvh; }
 #screen-reader { position: relative; overflow: hidden; background: #000; }
 
 #cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#live-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none; }
 
 #reading-wrap {
   position: absolute;
@@ -354,6 +355,11 @@ body { min-height: 100dvh; }
   margin-bottom: 14px;
 }
 .btn-filters:active { transform: scale(.98); }
+
+.beauty-box { margin-bottom: 14px; }
+.beauty-toggle { width: 100%; }
+#beauty-slider-row.off { opacity: .45; }
+#beauty-slider-row .sl-val { min-width: 44px; text-align: right; }
 
 /* Filtro de efeito - tela cheia */
 #filter-modal {
@@ -561,6 +567,7 @@ body { min-height: 100dvh; }
   <!-- ============ READER ============ -->
   <section id="screen-reader" class="screen">
     <video id="cam" playsinline autoplay muted></video>
+    <canvas id="live-canvas"></canvas>
 
     <div id="reading-wrap">
       <div id="scroll-content"></div>
@@ -621,6 +628,14 @@ body { min-height: 100dvh; }
       <span class="sl-val" id="size-val">26</span>
     </div>
     <button class="btn-filters" id="btn-filters"><span class="ic">&#127912;</span>Filtro de efeito</button>
+    <div class="beauty-box">
+      <button class="tool-btn beauty-toggle" id="btn-beauty"><span class="ic">&#10024;</span>Beleza</button>
+      <div class="sl-row cfg-size" id="beauty-slider-row">
+        <label>Intensidade</label>
+        <input type="range" id="beauty-range" min="0" max="100" step="1" value="40">
+        <span class="sl-val" id="beauty-val">40%</span>
+      </div>
+    </div>
     <div class="mbtns">
       <button class="mbtn" id="cfg-close">Concluído</button>
     </div>
@@ -703,9 +718,19 @@ body { min-height: 100dvh; }
     { label: 'Vintage', css: 'sepia(0.3) saturate(1.25) contrast(0.92) brightness(1.06)' },
     { label: 'Vívido', css: 'saturate(1.6) contrast(1.12)' },
     { label: 'Suave', css: 'saturate(0.82) contrast(0.95) brightness(1.08)' },
-    { label: 'Gelo', css: 'saturate(0.95) hue-rotate(12deg) brightness(1.06)' },
-    { label: 'Beleza', css: 'blur(0.8px) brightness(1.05) saturate(1.05)' }
+    { label: 'Gelo', css: 'saturate(0.95) hue-rotate(12deg) brightness(1.06)' }
   ];
+
+  var FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+
+  var faceLM = null;
+  var beautyLoadP = null;
+  var faceTs = 0;
+  var lastDetectT = -999;
+  var detTick = 0;
+  var detCanvas = null, detCtx = null;
+  var smFace = null, smFaceCtx = null, smEye = null, smEyeCtx = null;
+  var HMGS = { hw: 0, hh: 0 };
 
   var state = {
     doc: null,
@@ -735,7 +760,11 @@ body { min-height: 100dvh; }
     voiceNodes: null,
     canvasStream: null,
     readH: 0.46,
-    filterId: 0
+    filterId: 0,
+    beautyOn: false,
+    beautyLevel: 40,
+    face: null,
+    faceAge: 0
   };
 
   function loadSettings() {
@@ -749,6 +778,9 @@ body { min-height: 100dvh; }
       if (s.facing) state.facing = s.facing;
       if (typeof s.readH === 'number') state.readH = Math.max(0.18, Math.min(0.93, s.readH));
       if (typeof s.filter === 'number' && s.filter >= 0 && s.filter < FILTERS.length) state.filterId = s.filter;
+      if (typeof s.beautyOn === 'boolean') state.beautyOn = s.beautyOn;
+      var bl = parseInt(s.beautyLevel, 10);
+      if (!isNaN(bl) && bl >= 0 && bl <= 100) state.beautyLevel = bl;
     } catch (e) {}
   }
   function saveSettings() {
@@ -761,7 +793,9 @@ body { min-height: 100dvh; }
         voice: state.voiceOn,
         facing: state.facing,
         readH: state.readH,
-        filter: state.filterId
+        filter: state.filterId,
+        beautyOn: state.beautyOn,
+        beautyLevel: state.beautyLevel
       }));
     } catch (e) {}
   }
@@ -973,6 +1007,7 @@ body { min-height: 100dvh; }
     timerEl.textContent = '00:00';
     updateControlLabels();
     showScreen('reader');
+    syncBeautyCanvas();
     applyReadHeight();
     buildLines();
     setScrollState(0, false);
@@ -1317,7 +1352,9 @@ body { min-height: 100dvh; }
   }
 
   function applyMirror() {
-    cam.style.transform = state.facing === 'user' ? 'scaleX(-1)' : 'none';
+    var m = state.facing === 'user' ? 'scaleX(-1)' : 'none';
+    cam.style.transform = m;
+    $('live-canvas').style.transform = m;
   }
 
   $('btn-flip').addEventListener('click', function () {
@@ -1411,26 +1448,217 @@ body { min-height: 100dvh; }
     applyFilter();
   });
 
+  /* ---------- Beauty: filtro de beleza (MediaPipe Face Landmarker) ---------- */
+  function loadBeauty() {
+    if (beautyLoadP) return beautyLoadP;
+    beautyLoadP = import('./vendor/tasks-vision.mjs').then(function (mod) {
+      return mod.FilesetResolver.forVisionTasks('vendor/wasm').then(function (vision) {
+        var make = function (delegate) {
+          return mod.FaceLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: 'vendor/face_landmarker.task', delegate: delegate },
+            runningMode: 'VIDEO',
+            numFaces: 1,
+            minFaceDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            outputFaceBlendshapes: false,
+            outputFacialTransformationMatrixes: false
+          });
+        };
+        return make('GPU').catch(function () { return make('CPU'); });
+      });
+    }).then(function (fl) {
+      faceLM = fl;
+      return fl;
+    }).catch(function () {
+      beautyLoadP = null;
+      toast('Detecção de rosto indisponível neste aparelho');
+      return null;
+    });
+    return beautyLoadP;
+  }
+
+  function ensureBeautySizes(w, h) {
+    if (!detCanvas) { detCanvas = document.createElement('canvas'); detCtx = detCanvas.getContext('2d'); }
+    var dW = 480;
+    var dH = Math.max(2, Math.round(480 * h / w));
+    if (detCanvas.width !== dW || detCanvas.height !== dH) { detCanvas.width = dW; detCanvas.height = dH; }
+    var hw = Math.max(2, Math.round(w / 2));
+    var hh = Math.max(2, Math.round(h / 2));
+    if (!smFace || smFace.width !== hw || smFace.height !== hh) {
+      smFace = document.createElement('canvas'); smFace.width = hw; smFace.height = hh;
+      smFaceCtx = smFace.getContext('2d');
+      smEye = document.createElement('canvas'); smEye.width = hw; smEye.height = hh;
+      smEyeCtx = smEye.getContext('2d');
+    }
+    HMGS.hw = hw; HMGS.hh = hh;
+  }
+
+  function runDetection() {
+    if (!faceLM || !state.stream || cam.videoWidth <= 0) return;
+    lastDetectT = performance.now();
+    var vw = cam.videoWidth, vh = cam.videoHeight;
+    ensureBeautySizes(vw, vh);
+    detCtx.drawImage(cam, 0, 0, detCanvas.width, detCanvas.height);
+    var ts = Math.floor(performance.now());
+    if (ts <= faceTs) ts = faceTs + 1;
+    faceTs = ts;
+    var lm = null;
+    try {
+      var res = faceLM.detectForVideo(detCanvas, ts);
+      if (res && res.faceLandmarks && res.faceLandmarks.length) lm = res.faceLandmarks[0];
+    } catch (e2) {}
+    if (lm && lm.length >= 468) {
+      state.face = lm;
+      state.faceAge = 0;
+    } else {
+      state.faceAge++;
+      if (state.faceAge > 14) state.face = null;
+    }
+  }
+
+  function eyeGeom(lm, hw, hh, side) {
+    var o = lm[side === 'R' ? 33 : 362];
+    var i = lm[side === 'R' ? 133 : 263];
+    var cx = (o.x + i.x) / 2 * hw;
+    var cy = (o.y + i.y) / 2 * hh;
+    var d = Math.hypot((o.x - i.x) * hw, (o.y - i.y) * hh) || 4;
+    return { cx: cx, cy: cy, rx: d * 0.9, ry: d * 0.5 };
+  }
+
+  function carveEyes(ctx, lm, hw, hh) {
+    ['R', 'L'].forEach(function (side) {
+      var g = eyeGeom(lm, hw, hh, side);
+      ctx.beginPath();
+      ctx.ellipse(g.cx, g.cy, g.rx, g.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function drawUnderEyes(ctx, lm, hw, hh) {
+    ['R', 'L'].forEach(function (side) {
+      var g = eyeGeom(lm, hw, hh, side);
+      ctx.beginPath();
+      ctx.ellipse(g.cx, g.cy + g.ry * 1.1, g.rx * 0.95, g.ry * 0.95, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function applyBeauty(ctx, w, h) {
+    var lm = state.face;
+    if (!lm) return;
+    ensureBeautySizes(w, h);
+    var hw = HMGS.hw, hh = HMGS.hh;
+    var intensity = state.beautyLevel / 100;
+    if (intensity <= 0) return;
+    var gx = function (i) { return lm[i].x * hw; };
+    var gy = function (i) { return lm[i].y * hh; };
+    var faceW = Math.abs(gx(234) - gx(454)) || 10;
+    var skinBlur = Math.max(3, Math.min(12, faceW * 0.022));
+    var feather = Math.max(2, Math.min(10, faceW * 0.014));
+
+    var s = smFaceCtx;
+    s.save();
+    s.clearRect(0, 0, hw, hh);
+    s.globalCompositeOperation = 'source-over';
+    s.filter = 'blur(' + skinBlur + 'px) brightness(' + (1 + 0.06 * intensity).toFixed(3) + ') saturate(' + (1 - 0.05 * intensity).toFixed(3) + ')';
+    s.drawImage(cam, 0, 0, hw, hh);
+    s.globalCompositeOperation = 'destination-in';
+    s.filter = 'blur(' + feather + 'px)';
+    s.globalAlpha = intensity;
+    s.fillStyle = '#ffffff';
+    s.beginPath();
+    s.moveTo(gx(FACE_OVAL[0]), gy(FACE_OVAL[0]));
+    for (var k = 1; k < FACE_OVAL.length; k++) s.lineTo(gx(FACE_OVAL[k]), gy(FACE_OVAL[k]));
+    s.closePath();
+    s.fill();
+    s.globalAlpha = 1;
+    s.globalCompositeOperation = 'destination-out';
+    s.fillStyle = '#000000';
+    carveEyes(s, lm, hw, hh);
+    var mg = mouthGeom(lm, hw, hh);
+    s.beginPath();
+    s.ellipse(mg.cx, mg.cy, mg.rx, mg.ry, 0, 0, Math.PI * 2);
+    s.fill();
+    s.restore();
+
+    var e = smEyeCtx;
+    e.save();
+    e.clearRect(0, 0, hw, hh);
+    e.globalCompositeOperation = 'source-over';
+    e.filter = 'brightness(' + (1 + 0.1 * intensity).toFixed(3) + ') contrast(0.98)';
+    e.drawImage(cam, 0, 0, hw, hh);
+    e.globalCompositeOperation = 'destination-in';
+    e.filter = 'blur(' + (feather * 1.5) + 'px)';
+    e.globalAlpha = Math.min(0.9, 0.65 * intensity);
+    e.fillStyle = '#ffffff';
+    drawUnderEyes(e, lm, hw, hh);
+    e.restore();
+
+    ctx.drawImage(smFace, 0, 0, w, h);
+    ctx.drawImage(smEye, 0, 0, w, h);
+  }
+
+  function mouthGeom(lm, hw, hh) {
+    var l = lm[61], r = lm[291];
+    var t = lm[13], b = lm[14];
+    var cx = (l.x + r.x) / 2 * hw;
+    var cy = (l.y + r.y) / 2 * hh;
+    var wd = Math.hypot((l.x - r.x) * hw, (l.y - r.y) * hh) || 4;
+    var ht = Math.hypot((t.x - b.x) * hw, (t.y - b.y) * hh) || (wd * 0.35);
+    return { cx: cx, cy: cy, rx: wd * 0.62, ry: Math.max(2, ht * 0.85) };
+  }
+
+  function syncBeautyCanvas() {
+    var on = state.beautyOn && state.beautyLevel > 0;
+    $('live-canvas').style.display = on && $('screen-reader').classList.contains('active') ? '' : 'none';
+  }
+
+  function applyBeautyUi() {
+    $('btn-beauty').classList.toggle('on', state.beautyOn);
+    $('beauty-slider-row').classList.toggle('off', !state.beautyOn);
+    $('beauty-range').value = state.beautyLevel;
+    $('beauty-val').textContent = state.beautyLevel + '%';
+    updateControlLabels();
+    syncBeautyCanvas();
+    if (state.beautyOn && state.beautyLevel > 0) loadBeauty();
+    ensureCompose();
+    saveSettings();
+  }
+
+  $('btn-beauty').addEventListener('click', function () {
+    if (state.recording) { toast('Pare a gravação antes de mudar'); return; }
+    state.beautyOn = !state.beautyOn;
+    applyBeautyUi();
+    toast('Beleza ' + (state.beautyOn ? 'ligado' : 'desligado'));
+  });
+
+  $('beauty-range').addEventListener('input', function () {
+    state.beautyLevel = parseInt(this.value, 10);
+    applyBeautyUi();
+  });
+
   function updateControlLabels() {
     $('btn-mirror').classList.toggle('on', state.mirror);
     $('btn-txtvideo').classList.toggle('on', state.textInVideo);
     $('btn-voice').classList.toggle('on', state.voiceOn);
     $('btn-flip').classList.toggle('on', state.facing === 'environment');
+    $('btn-beauty').classList.toggle('on', state.beautyOn);
     var parts = [];
     parts.push(state.textInVideo ? 'Texto entra na gravação.' : 'Texto só na tela para ler.');
     if (state.voiceOn) parts.push('Isolamento de voz ativo: som de fundo removido, apenas a sua voz entra.');
     else parts.push('Isolamento de voz desligado.');
+    if (state.beautyOn && state.beautyLevel > 0) parts.push('Beleza da pele ativo.');
     $('rec-info').innerHTML = parts.join(' ');
   }
 
   /* ---------- canvas ---------- */
   function initCanvas() {
-    if (!state.canvas) { state.canvas = document.createElement('canvas'); }
+    if (!state.canvas) { state.canvas = $('live-canvas'); }
   }
 
   function ensureCompose() {
     if (state.composeRaf) { cancelAnimationFrame(state.composeRaf); state.composeRaf = null; }
-    if (!state.textInVideo && !state.recording) return;
+    if (!state.textInVideo && !state.recording && !(state.beautyOn && state.beautyLevel > 0)) return;
     var lastT = performance.now();
     function draw(now) {
       if (now - lastT >= 33) {
@@ -1453,8 +1681,14 @@ body { min-height: 100dvh; }
     if (state.mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
     if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
     ctx.drawImage(cam, 0, 0, c.width, c.height);
+    ctx.filter = 'none';
+    if (state.beautyOn && state.beautyLevel > 0) applyBeauty(ctx, c.width, c.height);
     ctx.restore();
     if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
+    detTick++;
+    if (state.beautyOn && state.beautyLevel > 0 && detTick % 5 === 0 && performance.now() - lastDetectT > 140) {
+      runDetection();
+    }
   }
 
   function drawTextOverlay(ctx, w, h) {
@@ -1661,6 +1895,7 @@ body { min-height: 100dvh; }
     cam.removeAttribute('src');
     cam.srcObject = null;
     openScripts(state.doc);
+    syncBeautyCanvas();
   }
 
   $('btn-back-scripts').addEventListener('click', backToScripts);
@@ -1699,6 +1934,8 @@ body { min-height: 100dvh; }
   /* ---------- init ---------- */
   loadSettings();
   applyFilter();
+  initCanvas();
+  applyBeautyUi();
   renderSaved();
   secureCheck();
   registerSW();
