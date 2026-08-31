@@ -1444,7 +1444,10 @@ body { min-height: 100dvh; }
 
   /* ---------- canvas ---------- */
   function initCanvas() {
-    if (!state.canvas) { state.canvas = document.createElement('canvas'); }
+    if (!state.canvas) {
+      state.canvas = document.createElement('canvas');
+      state.ctx2d = state.canvas.getContext('2d', { alpha: false });
+    }
   }
 
   function ensureCompose() {
@@ -1460,7 +1463,7 @@ body { min-height: 100dvh; }
           drawCompose();
           var cost = performance.now() - t0;
           lastT = now;
-          if (cost > 42) skip = Math.min(4, Math.max(1, Math.ceil(cost / 33) - 1));
+          if (cost > 42) skip = state.recording ? 0 : 1;
         }
       }
       state.composeRaf = requestAnimationFrame(draw);
@@ -1473,8 +1476,12 @@ body { min-height: 100dvh; }
     if (!state.stream || cam.videoWidth <= 0) return;
     var c = state.canvas;
     var vw = cam.videoWidth, vh = cam.videoHeight;
-    if (c.width !== vw || c.height !== vh) { c.width = vw; c.height = vh; }
-    var ctx = c.getContext('2d');
+    var MAX_W = 1920;
+    var ratio = vw / vh;
+    var cw = vw > MAX_W ? MAX_W : vw;
+    var ch = Math.round(cw / ratio);
+    if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+    var ctx = state.ctx2d;
     ctx.save();
     if (state.mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
     if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
@@ -1538,7 +1545,7 @@ body { min-height: 100dvh; }
     var voiceTrack = getVoiceTrack();
     var audioTracks = voiceTrack ? [voiceTrack] : state.stream.getAudioTracks();
     var ms = new MediaStream(vidTracks.concat(audioTracks));
-    var opts = {};
+    var opts = { videoBitsPerSecond: 3500000 };
     if (pm.mime) opts.mimeType = pm.mime;
     var rec;
     try { rec = new MediaRecorder(ms, opts); }
