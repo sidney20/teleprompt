@@ -745,6 +745,8 @@ body { min-height: 100dvh; }
   var STORE_KEY = 'teleprompt_docs_v1';
   var SETTINGS_KEY = 'teleprompt_settings_v1';
 
+  var OUT_W = 478, OUT_H = 850;
+
   var FILTERS = [
     { label: 'Original', css: 'none' },
     { label: 'P&B', css: 'grayscale(1) contrast(1.1)' },
@@ -1574,16 +1576,15 @@ body { min-height: 100dvh; }
     if (!state.stream || cam.videoWidth <= 0) return;
     var c = state.canvas;
     var vw = cam.videoWidth, vh = cam.videoHeight;
-    var MAX_W = 1920;
-    var ratio = vw / vh;
-    var cw = vw > MAX_W ? MAX_W : vw;
-    var ch = Math.round(cw / ratio);
-    if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+    if (c.width !== OUT_W || c.height !== OUT_H) { c.width = OUT_W; c.height = OUT_H; }
     var ctx = state.ctx2d;
     ctx.save();
     if (state.mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
     if (FILTERS[state.filterId].css !== 'none') ctx.filter = FILTERS[state.filterId].css;
-    ctx.drawImage(cam, 0, 0, c.width, c.height);
+    var scale = Math.max(OUT_W / vw, OUT_H / vh);
+    var sw = vw * scale, sh = vh * scale;
+    var sx = (OUT_W - sw) / 2, sy = (OUT_H - sh) / 2;
+    ctx.drawImage(cam, sx, sy, sw, sh);
     ctx.filter = 'none';
     ctx.restore();
     if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);
@@ -1619,11 +1620,11 @@ body { min-height: 100dvh; }
   function pickMime() {
     if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return { ext: 'mp4', mime: '' };
     var candidates = [
+      ['mp4', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'],
+      ['mp4', 'video/mp4'],
       ['webm', 'video/webm;codecs=vp9,opus'],
       ['webm', 'video/webm;codecs=vp8,opus'],
-      ['webm', 'video/webm'],
-      ['mp4', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'],
-      ['mp4', 'video/mp4']
+      ['webm', 'video/webm']
     ];
     for (var i = 0; i < candidates.length; i++) {
       if (MediaRecorder.isTypeSupported(candidates[i][1])) return { ext: candidates[i][0], mime: candidates[i][1] };
