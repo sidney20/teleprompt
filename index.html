@@ -995,6 +995,30 @@ body { min-height: 100dvh; }
   var RES = { '478x850': { w: 478, h: 850 }, '720x1280': { w: 720, h: 1280 }, '1080x1920': { w: 1080, h: 1920 } };
   function outDims() { return RES[state.res] || RES['478x850']; }
 
+  function isWeakDevice() {
+    try {
+      if (/iPhone|iPad/i.test(navigator.userAgent)) return false;
+      var ua = navigator.userAgent;
+      var weakChip = /Exynos|Snapdragon [45678]00|MT[6789]|Dimensity[67]00/i.test(ua + '');
+      var mem = navigator.deviceMemory || 8;
+      return mem <= 4 || weakChip;
+    } catch (e) { return false; }
+  }
+
+  function safeFpsForRes(fps) {
+    var dims = outDims();
+    if (dims.h >= 1920 && fps > 30) return 30;
+    return fps;
+  }
+
+  function bitrateForDims() {
+    var dims = outDims();
+    var w = dims.w, h = dims.h;
+    if (h >= 1920) return Math.round(5500000);
+    if (h >= 1280) return Math.round(2500000);
+    return Math.round(1100000);
+  }
+
   var FILTERS = [
     { label: 'Original', css: 'none' },
     { label: 'P&B', css: 'grayscale(1) contrast(1.1)' },
@@ -1035,7 +1059,7 @@ body { min-height: 100dvh; }
     readH: 0.46,
     filterId: 0,
     res: '478x850',
-    fps: 30,
+    fps: 24,
     countdown: 3,
     startScrollOnRecord: true
   };
@@ -1053,6 +1077,8 @@ body { min-height: 100dvh; }
       if (typeof s.filter === 'number' && s.filter >= 0 && s.filter < FILTERS.length) state.filterId = s.filter;
       if (s.res && RES[s.res]) state.res = s.res;
       if (s.fps === 24 || s.fps === 30 || s.fps === 60) state.fps = s.fps;
+      state.fps = safeFpsForRes(state.fps);
+      if (isWeakDevice() && (state.res !== '478x850' || state.fps !== 24)) { state.res = '478x850'; state.fps = 24; }
       if (s.countdown === 0 || s.countdown === 3 || s.countdown === 5 || s.countdown === 10) state.countdown = s.countdown;
       if (typeof s.startScrollOnRecord === 'boolean') state.startScrollOnRecord = s.startScrollOnRecord;
     } catch (e) {}
@@ -1666,25 +1692,28 @@ $('speed-range').addEventListener('input', function () {
       if (!Ctor) return;
       var ctx = new Ctor();
       var source = ctx.createMediaStreamSource(state.stream);
-      var high = ctx.createBiquadFilter();
-      high.type = 'highpass';
-      high.frequency.value = 120;
-      high.Q.value = 0.7;
       var voice = createVoiceNode(ctx);
-      var comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -22;
-      comp.knee.value = 20;
-      comp.ratio.value = 10;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.25;
-      var gain = ctx.createGain();
-      gain.gain.value = 1.5;
       var dest = ctx.createMediaStreamDestination();
-      source.connect(high);
-      high.connect(voice);
-      voice.connect(comp);
-      comp.connect(gain);
-      gain.connect(dest);
+      if (isWeakDevice()) {
+        source.connect(voice);
+        voice.connect(dest);
+      } else {
+        var high = ctx.createBiquadFilter();
+        high.type = 'highpass';
+        high.frequency.value = 120;
+        high.Q.value = 0.7;
+        var comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -22;
+        comp.knee.value = 20;
+        comp.ratio.value = 3;
+        var gain = ctx.createGain();
+        gain.gain.value = 1.3;
+        source.connect(high);
+        high.connect(voice);
+        voice.connect(comp);
+        comp.connect(gain);
+        gain.connect(dest);
+      }
       state.voiceCtx = ctx;
       state.voiceNodes = { source: source, dest: dest, rnn: voice._rnn };
       setupRnn(ctx, voice._rnn);
@@ -1773,7 +1802,7 @@ $('speed-range').addEventListener('input', function () {
   };
   var SEG_COERCE = {
     res: function (v) { return RES[v] ? v : state.res; },
-    fps: function (v) { var n = parseInt(v, 10); return (n === 24 || n === 30 || n === 60) ? n : state.fps; },
+    fps: function (v) { var n = parseInt(v, 10); n = (n === 24 || n === 30 || n === 60) ? n : state.fps; return safeFpsForRes(n); },
     countdown: function (v) { var n = parseInt(v, 10); return (n === 0 || n === 3 || n === 5 || n === 10) ? n : state.countdown; },
     startScrollOnRecord: function (v) { return v === 'start' ? true : (v === 'keep' ? false : state.startScrollOnRecord); }
   };
@@ -1955,6 +1984,14 @@ $('speed-range').addEventListener('input', function () {
 
   function startRecording() {
     if (!state.stream) { toast('Câmera não iniciada'); return; }
+    if (isWeakDevice() && (state.res !== '478x850' || state.fps !== 24)) {
+      state.res = '478x850';
+      state.fps = 24;
+      saveSettings();
+      syncSegs();
+      toast('Qualidade reduzida p/ este aparelho (478x850 · 24fps) para não cair');
+    }
+    state.fps = safeFpsForRes(state.fps);
     if (state.voiceOn) ensureVoicePipeline();
     if (state.startScrollOnRecord && !state.scrolling && state.maxScroll > 0) setScrollState(state.scrollY, true);
     var pm = pickMime();
@@ -1966,11 +2003,7 @@ $('speed-range').addEventListener('input', function () {
     var voiceTrack = getVoiceTrack();
     var audioTracks = voiceTrack ? [voiceTrack] : state.stream.getAudioTracks();
     var ms = new MediaStream(vidTracks.concat(audioTracks));
-    var opts = (function () {
-      var dims = outDims();
-      var bitrate = Math.round(3500000 * (dims.w * dims.h) / 406630);
-      return { videoBitsPerSecond: bitrate };
-    })();
+    var opts = { videoBitsPerSecond: bitrateForDims() };
     if (pm.mime) opts.mimeType = pm.mime;
     var rec;
     try { rec = new MediaRecorder(ms, opts); }
@@ -1989,6 +2022,9 @@ $('speed-range').addEventListener('input', function () {
     state.recorder = rec;
     rec.ondataavailable = function (e) { if (e.data && e.data.size > 0) state.chunks.push(e.data); };
     rec.onstop = onRecordingStopped;
+    rec.onerror = function () {
+      try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {}
+    };
     rec.start();
     timerEl.textContent = '00:00';
     state.timerSec = 0;
