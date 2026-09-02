@@ -254,9 +254,10 @@ body { min-height: 100dvh; }
   background: rgba(15,12,41,.78);
   border: 1px solid rgba(255,255,255,.12);
   backdrop-filter: blur(16px);
-  border-radius: 20px;
+  border-radius: 18px;
   padding: 10px;
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -266,14 +267,14 @@ body { min-height: 100dvh; }
 .sl-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#8b5cf6); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .sl-row .sl-val { width: 38px; text-align: right; font-size: .75rem; font-weight: 700; flex-shrink: 0; }
 
-.rec-row { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.rec-group { display: flex; align-items: center; gap: 8px; }
 .rec-btn {
   border: none;
   background: linear-gradient(135deg,#ef4444,#b91c1c);
-  width: 56px; height: 56px;
+  width: 48px; height: 48px;
   border-radius: 50%;
   color: #fff;
-  font-size: 1.05rem;
+  font-size: .95rem;
   cursor: pointer;
   box-shadow: 0 6px 20px rgba(239,68,68,.5);
   display: flex; align-items: center; justify-content: center;
@@ -288,9 +289,8 @@ body { min-height: 100dvh; }
 
 .play-hint { text-align: center; font-size: .7rem; color: #9ca3af; }
 
-.main-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .play-btn {
-  flex: 1 1 140px;
+  flex: 1;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 10px;
   border: none;
@@ -317,17 +317,24 @@ body { min-height: 100dvh; }
   font-weight: 600;
   cursor: pointer;
 }
+.min-btn.icon-only {
+  width: 48px; height: 48px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-size: 1.2rem;
+}
 .min-btn .ic { font-size: 1rem; }
 .min-btn:active { transform: scale(.96); }
 .gear-btn {
-  width: 52px; height: 52px;
+  width: 46px; height: 46px;
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 14px;
+  border-radius: 50%;
   border: 1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.06);
   color: #e5e7eb;
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   cursor: pointer;
 }
 .gear-btn:active { transform: scale(.94); }
@@ -485,11 +492,14 @@ body { min-height: 100dvh; }
 }
 .nav-btn:active { transform: scale(.94); }
 .script-idx { font-size: .8rem; font-weight: 800; color: #c4b5fd; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+.rt-nav { gap: 2px; }
+.rt-nav .nav-btn { width: 34px; height: 34px; font-size: 1.05rem; border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.06); }
+.rt-nav .script-idx { min-width: 28px; font-size: .74rem; }
 
 .vu {
-  width: 10px; height: 34px;
+  width: 9px; height: 28px;
   flex-shrink: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: rgba(255,255,255,.1);
   border: 1px solid rgba(255,255,255,.16);
   overflow: hidden;
@@ -740,30 +750,23 @@ body { min-height: 100dvh; }
 
     <div class="reader-top">
       <button class="icon-btn" id="btn-back-scripts" title="Voltar aos roteiros">&#8592;</button>
+      <div class="nav-row rt-nav" id="nav-row">
+        <button class="nav-btn" id="btn-script-prev" title="Roteiro anterior">&#8249;</button>
+        <div class="script-idx" id="script-idx">1/1</div>
+        <button class="nav-btn" id="btn-script-next" title="Próximo roteiro">&#8250;</button>
+      </div>
       <div class="rt-title" id="reader-title"></div>
       <div class="timer" id="timer">00:00</div>
     </div>
 
     <div id="reader-controls">
-      <div class="nav-row" id="nav-row">
-        <button class="nav-btn" id="btn-script-prev" title="Roteiro anterior">&#8249;</button>
-        <div class="script-idx" id="script-idx">1/1</div>
-        <button class="nav-btn" id="btn-script-next" title="Próximo roteiro">&#8250;</button>
-      </div>
-      <div class="sl-row">
-        <label>Velocidade</label>
-        <input type="range" id="speed-range" min="20" max="140" step="5" value="45">
-        <span class="sl-val" id="speed-val">45</span>
-      </div>
-      <div class="main-row">
-        <button class="min-btn" id="btn-restart"><span class="ic">&#8634;</span>Tela inicial</button>
-        <button class="play-btn" id="btn-play"><span class="ic">&#9654;</span>Rolar</button>
-        <button class="gear-btn" id="btn-config" title="Configurações">&#9881;</button>
-      </div>
-      <div class="rec-row">
-        <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
+      <button class="min-btn icon-only" id="btn-restart" title="Tela inicial">&#8634;</button>
+      <button class="play-btn" id="btn-play"><span class="ic">&#9654;</span>Rolar</button>
+      <div class="rec-group">
         <div class="vu" id="vu"><div class="vu-fill" id="vu-fill"></div></div>
+        <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
       </div>
+      <button class="gear-btn" id="btn-config" title="Configurações">&#9881;</button>
     </div>
   </section>
 </div>
@@ -842,6 +845,11 @@ body { min-height: 100dvh; }
         <label>Texto</label>
         <input type="range" id="size-range" min="16" max="46" step="1" value="26">
         <span class="sl-val" id="size-val">26</span>
+      </div>
+      <div class="sl-row cfg-size">
+        <label>Velocidade</label>
+        <input type="range" id="speed-range" min="20" max="140" step="5" value="45">
+        <span class="sl-val" id="speed-val">45</span>
       </div>
       <div class="sw-row" id="btn-txtvideo">
         <span class="sw-ic">AB</span>
