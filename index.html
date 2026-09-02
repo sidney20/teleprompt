@@ -492,9 +492,21 @@ body { min-height: 100dvh; }
 }
 .nav-btn:active { transform: scale(.94); }
 .script-idx { font-size: .8rem; font-weight: 800; color: #c4b5fd; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
-.rt-nav { gap: 2px; }
-.rt-nav .nav-btn { width: 34px; height: 34px; font-size: 1.05rem; border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.06); }
-.rt-nav .script-idx { min-width: 28px; font-size: .74rem; }
+.mid-nav {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  z-index: 6;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(15,12,41,.82);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 6px 24px rgba(0,0,0,.4);
+}
+.mid-nav .nav-btn { width: 46px; height: 46px; font-size: 1.3rem; }
+.mid-nav .script-idx { min-width: 34px; }
 
 .vu {
   width: 9px; height: 28px;
@@ -750,13 +762,14 @@ body { min-height: 100dvh; }
 
     <div class="reader-top">
       <button class="icon-btn" id="btn-back-scripts" title="Voltar aos roteiros">&#8592;</button>
-      <div class="nav-row rt-nav" id="nav-row">
-        <button class="nav-btn" id="btn-script-prev" title="Roteiro anterior">&#8249;</button>
-        <div class="script-idx" id="script-idx">1/1</div>
-        <button class="nav-btn" id="btn-script-next" title="Próximo roteiro">&#8250;</button>
-      </div>
       <div class="rt-title" id="reader-title"></div>
       <div class="timer" id="timer">00:00</div>
+    </div>
+
+    <div class="nav-row mid-nav" id="nav-row">
+      <button class="nav-btn" id="btn-script-prev" title="Roteiro anterior">&#8249;</button>
+      <div class="script-idx" id="script-idx">1/1</div>
+      <button class="nav-btn" id="btn-script-next" title="Próximo roteiro">&#8250;</button>
     </div>
 
     <div id="reader-controls">
@@ -1312,12 +1325,21 @@ body { min-height: 100dvh; }
   $('inst-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
 
   /* ---------- Reader ---------- */
+  function positionMidNav() {
+    var row = $('nav-row');
+    if (!row || row.style.display === 'none') return;
+    var pBottom = readingWrap.getBoundingClientRect().bottom;
+    var cTop = $('reader-controls').getBoundingClientRect().top;
+    row.style.top = ((pBottom + cTop) / 2) + 'px';
+  }
+
   function updateScriptNav() {
     var n = state.doc ? state.doc.length : 0;
     var row = $('nav-row');
     if (n < 2) { row.style.display = 'none'; return; }
     row.style.display = 'flex';
     $('script-idx').textContent = (state.idx + 1) + '/' + n;
+    requestAnimationFrame(positionMidNav);
   }
 
   function openReader(i) {
@@ -1340,6 +1362,7 @@ body { min-height: 100dvh; }
   function applyReadHeight() {
     var vh = document.documentElement.clientHeight;
     readingWrap.style.height = Math.round(vh * state.readH) + 'px';
+    requestAnimationFrame(positionMidNav);
   }
 
   function initReadDrag() {
@@ -1517,6 +1540,7 @@ $('speed-range').addEventListener('input', function () {
       var ratio = state.maxScroll > 0 ? state.scrollY / state.maxScroll : 0;
       buildLines();
       setScrollState(state.maxScroll * ratio, state.scrolling);
+      requestAnimationFrame(positionMidNav);
     }
   });
 
