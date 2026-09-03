@@ -200,6 +200,7 @@ body { min-height: 100dvh; }
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.08);
   box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  touch-action: none;
 }
 #scroll-content {
   position: absolute;
@@ -1561,8 +1562,10 @@ body { min-height: 100dvh; }
       startY = e.clientY;
       startH = readingWrap.getBoundingClientRect().height;
       readingWrap.classList.add('dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
     });
     function onMove(e) {
       var vh = document.documentElement.clientHeight;
@@ -1582,27 +1585,34 @@ body { min-height: 100dvh; }
       readingWrap.classList.remove('dragging');
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       saveSettings();
     }
   }
 
   function initManualScroll() {
     var startY = 0, startScroll = 0, dragging = false;
-    scrollContent.addEventListener('pointerdown', function (e) {
+    function onPointerDown(e) {
       if (state.recording) return;
+      if (e.target && e.target.closest && e.target.closest('.read-handle')) return;
+      e.preventDefault();
       dragging = true;
       startY = e.clientY;
       startScroll = state.scrollY;
       if (state.scrolling) setScrollState(state.scrollY, false);
       try { scrollContent.setPointerCapture(e.pointerId); } catch (err) {}
-    });
-    scrollContent.addEventListener('pointermove', function (e) {
+    }
+    function onPointerMove(e) {
       if (!dragging) return;
       var dY = startScroll + (startY - e.clientY);
       setScrollState(dY, false);
-    });
-    scrollContent.addEventListener('pointerup', function () { dragging = false; });
-    scrollContent.addEventListener('pointercancel', function () { dragging = false; });
+    }
+    function onPointerEnd() { dragging = false; }
+    // ouve no card inteiro (e não só no texto) para arrastar em qualquer lugar funcionar
+    readingWrap.addEventListener('pointerdown', onPointerDown);
+    readingWrap.addEventListener('pointermove', onPointerMove);
+    readingWrap.addEventListener('pointerup', onPointerEnd);
+    readingWrap.addEventListener('pointercancel', onPointerEnd);
   }
 
   function buildLines() {
