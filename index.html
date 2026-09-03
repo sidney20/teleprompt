@@ -983,8 +983,8 @@ body { min-height: 100dvh; }
 <!-- ============ MODAL NOME ============ -->
 <div class="modal-overlay" id="name-modal">
   <div class="modal">
-    <h2>Qual é o seu nome?</h2>
-    <p class="desc">Para o dono do app saber quem está usando o teleprompt.</p>
+    <h2>Confirme seu nome</h2>
+    <p class="desc">O dono do app usa seu nome para saber quem está usando o teleprompt. Digite ou confirme abaixo.</p>
     <input class="name-input" id="name-input" type="text" maxlength="40" placeholder="Digite seu nome" autocomplete="name">
     <div class="mbtns">
       <button class="mbtn" id="name-submit">Continuar</button>
@@ -1453,11 +1453,12 @@ body { min-height: 100dvh; }
     tpRecord('errors', Object.assign({ type: type, message: String(message || '').slice(0, 500) }, extra || {}));
   }
 
+  var tpAskedThis = false;
   function tpAutoInit() {
     TP.name = localStorage.getItem(TP.nameKey) || null;
-    if (!TP.name) { tpShowNameModal(); return; }
-    tpLogin();
-    tpRecord('sessions', { action: 'open' });
+    // Sempre pergunta/confirma o nome (preenchido se já existir), para registrar no painel
+    tpShowNameModal(TP.name || '');
+    if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); }
   }
 
   function tpLogin() {
@@ -1474,7 +1475,7 @@ body { min-height: 100dvh; }
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
           }).catch(function (err) {
-            // se falhou por permissão (rules não publicadas ou mal configuradas), tenta update
+            try { toast('Não deu pra registrar seu nome (sem internet?)'); } catch (e) {}
             return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
           });
         });
@@ -1482,10 +1483,12 @@ body { min-height: 100dvh; }
     }).catch(function () {});
   }
 
-  function tpShowNameModal() {
+  function tpShowNameModal(prefill) {
     var m = $('name-modal');
     var input = $('name-input');
     var btn = $('name-submit');
+    if (tpAskedThis) return;
+    tpAskedThis = true;
     function submit() {
       var v = (input.value || '').trim();
       if (!v) { input.focus(); return; }
@@ -1495,7 +1498,7 @@ body { min-height: 100dvh; }
       tpLogin();
       tpRecord('sessions', { action: 'open' });
     }
-    input.value = '';
+    input.value = prefill || '';
     btn.onclick = submit;
     input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
     m.classList.add('visible');
