@@ -1,4 +1,4 @@
-const CACHE = 'teleprompt-v27';
+const CACHE = 'teleprompt-v28';
 const ASSETS = [
   './',
   './index.html',

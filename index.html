@@ -1469,16 +1469,13 @@ body { min-height: 100dvh; }
           TP.uid = res.user.uid;
           var now = Date.now();
           var me = TP.db.collection('users').doc(TP.uid);
-          return me.get().then(function (snap) {
-            var base = { name: TP.name, admin: false, firstSeen: now, lastSeen: now };
-            var extra = tpMeta();
-            if (snap.exists) {
-              return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
-            }
-            return me.set(Object.assign(base, extra)).catch(function () {});
-          }).then(function () {
+          var data = Object.assign({ name: TP.name, admin: false, firstSeen: now, lastSeen: now }, tpMeta());
+          return me.set(data, { merge: true }).then(function () {
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
+          }).catch(function (err) {
+            // se falhou por permissão (rules não publicadas ou mal configuradas), tenta update
+            return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
           });
         });
       } catch (e) {}
