@@ -1461,10 +1461,20 @@ body { min-height: 100dvh; }
     if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); }
   }
 
+  function tpDebug(msg) {
+    try {
+      var ta = $('toast');
+      ta.textContent = msg;
+      ta.classList.add('show');
+      setTimeout(function () { ta.classList.remove('show'); }, 6000);
+    } catch (e) {}
+    try { tpLog('tp-debug', msg); } catch (e) {}
+  }
+
   function tpLogin() {
     if (!TP.name) return;
     tpLoadFirebase().then(function () {
-      if (!TP.ready) return;
+      if (!TP.ready) { tpDebug('Falha ao carregar Firebase SDK'); return; }
       try {
         return TP.auth.signInAnonymously().then(function (res) {
           TP.uid = res.user.uid;
@@ -1474,13 +1484,16 @@ body { min-height: 100dvh; }
           return me.set(data, { merge: true }).then(function () {
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
+            tpDebug('Nome registrado!');
           }).catch(function (err) {
-            try { toast('Não deu pra registrar seu nome (sem internet?)'); } catch (e) {}
+            tpDebug('Falha ao salvar: ' + (err && err.code ? err.code : err));
             return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
           });
+        }).catch(function (err) {
+          tpDebug('Falha no login: ' + (err && err.code ? err.code : err));
         });
-      } catch (e) {}
-    }).catch(function () {});
+      } catch (e) { tpDebug('Erro: ' + e.message); }
+    }).catch(function (e) { tpDebug('Erro SDK: ' + (e && e.message)); });
   }
 
   function tpShowNameModal(prefill) {
