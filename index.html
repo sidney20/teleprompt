@@ -653,6 +653,21 @@ body { min-height: 100dvh; }
 .mbtn.green { background: linear-gradient(135deg,#10b981,#059669); }
 .mbtn.ghost { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
 
+.name-input {
+  width: 100%;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: .95rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 14px;
+  outline: none;
+}
+.name-input::placeholder { color: rgba(255,255,255,.35); }
+.name-input:focus { border-color: #8b5cf6; }
+
 .inst-block { background: rgba(255,255,255,.05); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
 .inst-block .ib-title { font-size: .74rem; text-transform: uppercase; letter-spacing: .5px; color: #c4b5fd; font-weight: 700; margin-bottom: 8px; }
 .inst-block p { font-size: .84rem; line-height: 1.65; color: #e5e7eb; margin-bottom: 10px; white-space: pre-wrap; }
@@ -961,6 +976,18 @@ body { min-height: 100dvh; }
     <div class="mbtns">
       <button class="mbtn" id="confirm-yes" style="background: linear-gradient(135deg,#ef4444,#dc2626);">Sim, apagar</button>
       <button class="mbtn ghost" id="confirm-no">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL NOME ============ -->
+<div class="modal-overlay" id="name-modal">
+  <div class="modal">
+    <h2>Qual é o seu nome?</h2>
+    <p class="desc">Para o dono do app saber quem está usando o teleprompt.</p>
+    <input class="name-input" id="name-input" type="text" maxlength="40" placeholder="Digite seu nome" autocomplete="name">
+    <div class="mbtns">
+      <button class="mbtn" id="name-submit">Continuar</button>
     </div>
   </div>
 </div>
@@ -1351,6 +1378,136 @@ body { min-height: 100dvh; }
   $('inst-close').addEventListener('click', function () { $('inst-modal').classList.remove('visible'); });
   $('inst-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
 
+  /* ---------- Telemetria & registro de nome (Firebase) ---------- */
+  var TP = {
+    nameKey: 'teleprompt_name',
+    name: null,
+    uid: null,
+    db: null,
+    ready: false,
+    auth: null,
+    cfg: {
+      apiKey: "AIzaSyApv4v2RfUl1KZliiFzv1abJbyzdh6yH8s",
+      authDomain: "deshboard-d3f4a.firebaseapp.com",
+      projectId: "deshboard-d3f4a",
+      storageBucket: "deshboard-d3f4a.firebasestorage.app",
+      messagingSenderId: "337476542022",
+      appId: "1:337476542022:web:595640b2f99d5d2fddf447"
+    }
+  };
+
+  function tpUa() {
+    var s = '';
+    if (navigator.userAgentData && navigator.userAgentData.platform) s += navigator.userAgentData.platform + ' ';
+    s += navigator.userAgent || '';
+    return s.slice(0, 300);
+  }
+  function tpMeta() {
+    return {
+      ua: tpUa(),
+      screen: (screen.width || 0) + 'x' + (screen.height || 0),
+      ram: navigator.deviceMemory || null
+    };
+  }
+
+  function tpLoadFirebase() {
+    if (TP.ready) return Promise.resolve(TP.db);
+    if (TP.loading) return TP.loading;
+    TP.loading = new Promise(function (resolve) {
+      var need = ['https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
+                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'];
+      var rem = need.length;
+      function done() { rem--; if (rem === 0) {
+        try {
+          firebase.initializeApp(TP.cfg);
+          TP.auth = firebase.auth();
+          TP.db = firebase.firestore();
+          TP.ready = true;
+        } catch (e) {}
+        resolve(TP.db);
+      }}
+      need.forEach(function (url) {
+        var s = document.createElement('script');
+        s.src = url;
+        s.onload = done;
+        s.onerror = done;
+        document.head.appendChild(s);
+      });
+    });
+    return TP.loading;
+  }
+
+  function tpRecord(collection, data, keep) {
+    if (!TP.db) { TP.queue.push({ c: collection, d: data }); while (TP.queue.length > 40) TP.queue.shift(); return; }
+    var payload = Object.assign({ ts: Date.now() }, data);
+    if (TP.uid) payload.userId = TP.uid;
+    if (TP.name) payload.userName = TP.name;
+    try {
+      var rec = TP.db.collection(collection).add(payload);
+      if (!keep) rec.catch(function () {});
+    } catch (e) {}
+  }
+
+  function tpLog(type, message, extra) {
+    tpRecord('errors', Object.assign({ type: type, message: String(message || '').slice(0, 500) }, extra || {}));
+  }
+
+  function tpAutoInit() {
+    TP.name = localStorage.getItem(TP.nameKey) || null;
+    if (!TP.name) { tpShowNameModal(); return; }
+    tpLogin();
+    tpRecord('sessions', { action: 'open' });
+  }
+
+  function tpLogin() {
+    if (!TP.name) return;
+    tpLoadFirebase().then(function () {
+      if (!TP.ready) return;
+      try {
+        return TP.auth.signInAnonymously().then(function (res) {
+          TP.uid = res.user.uid;
+          var now = Date.now();
+          var me = TP.db.collection('users').doc(TP.uid);
+          return me.get().then(function (snap) {
+            var base = { name: TP.name, admin: false, firstSeen: now, lastSeen: now };
+            var extra = tpMeta();
+            if (snap.exists) {
+              return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
+            }
+            return me.set(Object.assign(base, extra)).catch(function () {});
+          }).then(function () {
+            TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
+            TP.queue = [];
+          });
+        });
+      } catch (e) {}
+    }).catch(function () {});
+  }
+
+  function tpShowNameModal() {
+    var m = $('name-modal');
+    var input = $('name-input');
+    var btn = $('name-submit');
+    function submit() {
+      var v = (input.value || '').trim();
+      if (!v) { input.focus(); return; }
+      TP.name = v;
+      try { localStorage.setItem(TP.nameKey, v); } catch (e) {}
+      m.classList.remove('visible');
+      tpLogin();
+      tpRecord('sessions', { action: 'open' });
+    }
+    input.value = '';
+    btn.onclick = submit;
+    input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+    m.classList.add('visible');
+    setTimeout(function () { input.focus(); }, 60);
+  }
+
+  window.addEventListener('error', function (e) { tpLog('js', e.message, { source: e.filename || '', line: e.lineno }); });
+  window.addEventListener('unhandledrejection', function (e) { tpLog('promise', e.reason && e.reason.message ? e.reason.message : 'unhandled rejection'); });
+
   /* ---------- Reader ---------- */
   function updateScriptNav() {
     var n = state.doc ? state.doc.length : 0;
@@ -1573,6 +1730,9 @@ $('speed-range').addEventListener('input', function () {
       cam.muted = true;
       applyMirror();
     } catch (err) {
+      tpLog('camera', 'getUserMedia falhou: ' + (err && err.message ? err.message : ''), { name: err && err.name });
+      try { if (state.stream) state.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      state.stream = null;
       toast('Sem permissão ou câmera indisponível. Abra via HTTPS.');
     }
   }
@@ -2011,6 +2171,7 @@ $('speed-range').addEventListener('input', function () {
       try { rec = new MediaRecorder(ms); }
       catch (e2) {
         state.recording = false;
+        tpLog('rec-unsupported', 'MediaRecorder não suportado', { res: state.res, fps: state.fps, mime: pm.mime });
         if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
         ensureCompose();
         toast('Gravação não suportada neste navegador');
@@ -2023,9 +2184,11 @@ $('speed-range').addEventListener('input', function () {
     rec.ondataavailable = function (e) { if (e.data && e.data.size > 0) state.chunks.push(e.data); };
     rec.onstop = onRecordingStopped;
     rec.onerror = function () {
+      tpLog('rec-error', 'MediaRecorder.onerror', { res: state.res, fps: state.fps, mime: rec.mimeType || '' });
       try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {}
     };
     rec.start();
+    tpRecord('sessions', { action: 'record', res: state.res, fps: state.fps });
     timerEl.textContent = '00:00';
     state.timerSec = 0;
     state.timerInt = setInterval(function () {
@@ -2365,6 +2528,7 @@ $('speed-range').addEventListener('input', function () {
 
   /* ---------- init ---------- */
   loadSettings();
+  tpAutoInit();
   applyFilter();
   initCanvas();
   renderSaved();
