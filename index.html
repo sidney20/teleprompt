@@ -984,8 +984,8 @@ body { min-height: 100dvh; }
 <!-- ============ MODAL NOME ============ -->
 <div class="modal-overlay" id="name-modal">
   <div class="modal">
-    <h2>Confirme seu nome</h2>
-    <p class="desc">O dono do app usa seu nome para saber quem está usando o teleprompt. Digite ou confirme abaixo.</p>
+    <h2>Qual é o seu nome?</h2>
+    <p class="desc">Preencha uma única vez. O dono do app usa seu nome para saber quem está usando o teleprompt.</p>
     <input class="name-input" id="name-input" type="text" maxlength="40" placeholder="Digite seu nome" autocomplete="name">
     <div class="mbtns">
       <button class="mbtn" id="name-submit">Continuar</button>
@@ -1455,22 +1455,10 @@ body { min-height: 100dvh; }
     tpRecord('errors', Object.assign({ type: type, message: String(message || '').slice(0, 500) }, extra || {}));
   }
 
-  var tpAskedThis = false;
   function tpAutoInit() {
     TP.name = localStorage.getItem(TP.nameKey) || null;
-    // Sempre pergunta/confirma o nome (preenchido se já existir), para registrar no painel
-    tpShowNameModal(TP.name || '');
-    if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); }
-  }
-
-  function tpDebug(msg) {
-    try {
-      var ta = $('toast');
-      ta.textContent = msg;
-      ta.classList.add('show');
-      setTimeout(function () { ta.classList.remove('show'); }, 6000);
-    } catch (e) {}
-    try { tpLog('tp-debug', msg); } catch (e) {}
+    if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); return; }
+    tpShowNameModal();
   }
 
   function tpLogin() {
@@ -1486,7 +1474,6 @@ body { min-height: 100dvh; }
           return me.set(data, { merge: true }).then(function () {
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
-            tpDebug('Nome registrado!');
           }).catch(function (err) {
             tpDebug('Falha ao salvar: ' + (err && err.code ? err.code : err));
             return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
@@ -1498,12 +1485,10 @@ body { min-height: 100dvh; }
     }).catch(function (e) { tpDebug('Erro SDK: ' + (e && e.message)); });
   }
 
-  function tpShowNameModal(prefill) {
+  function tpShowNameModal() {
     var m = $('name-modal');
     var input = $('name-input');
     var btn = $('name-submit');
-    if (tpAskedThis) return;
-    tpAskedThis = true;
     function submit() {
       var v = (input.value || '').trim();
       if (!v) { input.focus(); return; }
@@ -1513,7 +1498,7 @@ body { min-height: 100dvh; }
       tpLogin();
       tpRecord('sessions', { action: 'open' });
     }
-    input.value = prefill || '';
+    input.value = '';
     btn.onclick = submit;
     input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
     m.classList.add('visible');
