@@ -1004,6 +1004,15 @@ body { min-height: 100dvh; }
 
   var $ = function (id) { return document.getElementById(id); };
 
+  // Extrai somente o número do roteiro, ignorando IDs/timestamps extra (ex: "1788469463004")
+  function scriptNum(s, i) {
+    var v = s && s.num;
+    if (v == null || v === '' || isNaN(Number(v))) return String(i + 1).padStart(2, '0');
+    var n = Number(String(v).replace(/\D+/g, ''));
+    if (!isFinite(n) || n <= 0 || n >= 1000) return String(i + 1).padStart(2, '0');
+    return String(n).padStart(2, '0');
+  }
+
   var homeLink = $('doc-link');
   var btnLoad = $('btn-load');
   var statusEl = $('status');
@@ -1328,7 +1337,7 @@ body { min-height: 100dvh; }
     $('scripts-doc-title').textContent = 'Meus Roteiros';
     $('scripts-count').textContent = scripts.length + (scripts.length === 1 ? ' roteiro' : ' roteiros');
     scriptsList.innerHTML = scripts.map(function (s, i) {
-      var num = s.num ? String(s.num).padStart(2, '0') : String(i + 1).padStart(2, '0');
+      var num = scriptNum(s, i);
       var preview = (s.reading[0] || '').slice(0, 90);
       var dots = s.reading[0] && s.reading[0].length > 90 ? '…' : '';
       var hasInst = s.instructions.length > 0;
@@ -1370,7 +1379,7 @@ body { min-height: 100dvh; }
   /* ---------- Instructions modal ---------- */
   function openInstructions(i) {
     var s = state.doc[i];
-    $('inst-title').textContent = (s.num ? '#' + s.num + ' · ' : '') + (s.displayTitle || 'Roteiro ' + (i + 1));
+    $('inst-title').textContent = (s.num ? '#' + scriptNum(s, i) + ' · ' : '') + (s.displayTitle || 'Roteiro ' + (i + 1));
     $('inst-body').innerHTML = s.instructions.length
       ? s.instructions.map(function (p) { return '<div class="inst-block"><p>' + esc(p) + '</p></div>'; }).join('')
       : '<div class="desc">Este roteiro não tem instruções adicionais.</div>';
@@ -1520,7 +1529,7 @@ body { min-height: 100dvh; }
   function openReader(i) {
     state.idx = i;
     var s = state.doc[i];
-    readerTitle.textContent = (s.num ? '#' + s.num + ' ' : '') + (s.displayTitle || 'Roteiro ' + (i + 1));
+    readerTitle.textContent = (s.num ? '#' + scriptNum(s, i) + ' ' : '') + (s.displayTitle || 'Roteiro ' + (i + 1));
     timerEl.textContent = '00:00';
     updateControlLabels();
     showScreen('reader');
@@ -2386,7 +2395,7 @@ $('speed-range').addEventListener('input', function () {
 
   $('btn-download').addEventListener('click', function () {
     if (!state.lastBlobUrl) return;
-    var num = state.doc[state.idx].num ? String(state.doc[state.idx].num).padStart(2, '0') : String(state.idx + 1).padStart(2, '0');
+    var num = scriptNum(state.doc[state.idx], state.idx);
     var name = 'roteiro-' + num + '.' + state.fileExt;
     if (window.showSaveFilePicker) {
       var accept = {};
