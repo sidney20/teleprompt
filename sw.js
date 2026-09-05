@@ -1,4 +1,4 @@
-const CACHE = 'teleprompt-v34';
+const CACHE = 'teleprompt-v35';
 const ASSETS = [
   './',
   './index.html',
@@ -12,7 +12,13 @@ const ASSETS = [
   './vendor/rnnoise.wasm',
   './vendor/webm-duration-fix.js',
   './vendor/int64-buffer.js',
-  './vendor/ebml-block.js'
+  './vendor/ebml-block.js',
+  './beauty/beauty-settings.js',
+  './beauty/beauty-shaders.js',
+  './beauty/skin-mask.js',
+  './beauty/face-tracker.js',
+  './beauty/beauty-gl.js',
+  './beauty/beauty-app.js'
 ];
 
 self.addEventListener('install', (event) => {
