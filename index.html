@@ -2352,7 +2352,7 @@ $('speed-range').addEventListener('input', function () {
     if (state.rvfc) { try { cam.cancelVideoFrameCallback(state.rvfc); } catch (e) {} state.rvfc = null; }
     if (!state.textInVideo && !state.recording && !state.beautyPreview) return;
     if (state.supportsRVFC === undefined) state.supportsRVFC = !!(cam && typeof cam.requestVideoFrameCallback === 'function');
-    if (state.debug === undefined) state.debug = /[?&]debug=1/.test(location.search);
+    state.debug = /[?&]debug=1/.test(location.search);
     var lastT = performance.now();
     var skip = 0;
     var stT = 0, stN = 0, stFps = 0;
