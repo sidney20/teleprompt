@@ -332,6 +332,12 @@ body { min-height: 100dvh; }
   cursor: pointer;
 }
 .gear-btn:active { transform: scale(.94); }
+#ctrl-wrap #btn-beauty {
+  position: absolute;
+  top: 6px; right: 12px;
+  width: 46px; height: 46px;
+  z-index: 6;
+}
 
 .cfg-size { margin-bottom: 4px; }
 
@@ -834,6 +840,7 @@ body { min-height: 100dvh; }
     </div>
 
     <div class="ctrl-wrap" id="ctrl-wrap">
+      <button class="gear-btn" id="btn-beauty" title="Beleza facial">&#10024;</button>
       <div class="nav-row ctrl-nav" id="nav-row">
         <button class="nav-btn" id="btn-script-prev" title="Roteiro anterior">&#8249;</button>
         <div class="script-idx" id="script-idx">1/1</div>
@@ -848,7 +855,6 @@ body { min-height: 100dvh; }
           <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
         </div>
         <button class="gear-btn" id="btn-config" title="Configurações">&#9881;</button>
-        <button class="gear-btn" id="btn-beauty" title="Beleza facial">&#10024;</button>
       </div>
     </div>
   </section>
@@ -1108,6 +1114,7 @@ body { min-height: 100dvh; }
   var cam = $('cam');
   var readingWrap = $('reading-wrap');
   var scrollContent = $('scroll-content');
+  var ctrlWrap = $('ctrl-wrap');
   var readerTitle = $('reader-title');
   var timerEl = $('timer');
 
@@ -1638,7 +1645,12 @@ body { min-height: 100dvh; }
 
   function applyReadHeight() {
     var vh = document.documentElement.clientHeight;
-    readingWrap.style.height = Math.round(vh * state.readH) + 'px';
+    var top = readingWrap.getBoundingClientRect().top;
+    var ctrlTop = ctrlWrap.getBoundingClientRect().top;
+    var maxH = vh - top - 185;
+    if (ctrlTop >= top + 100) maxH = ctrlTop - top - 12;
+    var h = Math.min(Math.round(vh * state.readH), Math.max(Math.round(vh * 0.18), maxH));
+    readingWrap.style.height = h + 'px';
   }
 
   function initReadDrag() {
@@ -1658,7 +1670,8 @@ body { min-height: 100dvh; }
       var vh = document.documentElement.clientHeight;
       var top = readingWrap.getBoundingClientRect().top;
       var minH = Math.round(vh * 0.18);
-      var maxH = Math.round(vh - top - 185);
+      var ctrlTop = ctrlWrap.getBoundingClientRect().top;
+      var maxH = Math.round(ctrlTop - top - 12);
       if (maxH < minH) maxH = minH;
       var h = startH + (e.clientY - startY);
       h = Math.max(minH, Math.min(h, maxH));

@@ -131,13 +131,15 @@ export class BeautyGL {
 
   isReady() { return this.W > 0; }
 
-  /* Cover-crop mapping from output UVs onto the source texture (normalized [x,y,w,h]). */
+  /* Cover-crop mapping from output UVs onto the source texture (normalized [x,y,w,h]).
+     Shows the same region the 2D drawImage cover-crop shows: the source slice of
+     size outW/scale x outH/scale (no extra zoom when aspects match). */
   cropUv(outW, outH, srcW, srcH) {
     var scale = Math.max(outW / srcW, outH / srcH);
-    var srcW2 = srcW * scale, srcH2 = srcH * scale;
-    var offX = Math.max(0, (srcW - srcW2) / 2);
-    var offY = Math.max(0, (srcH - srcH2) / 2);
-    return [offX / srcW, offY / srcH, srcW2 / srcW, srcH2 / srcH];
+    var sw = outW / scale, sh = outH / scale;
+    var offX = Math.max(0, (srcW - sw) / 2);
+    var offY = Math.max(0, (srcH - sh) / 2);
+    return [offX / srcW, offY / srcH, sw / srcW, sh / srcH];
   }
 
   /* source: HTMLVideoElement or canvas. mask: mask image (may be null). Returns true if rendered. */
