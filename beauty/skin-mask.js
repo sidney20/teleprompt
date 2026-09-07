@@ -1,6 +1,7 @@
 /* Skin mask generation from MediaPipe Face Landmarker landmarks (478 pts, normalized).
-   Output: canvas (procW x procH) where R = skin, G = eyes, B = teeth.
+   Output: canvas/image (maskW x maskH) where R = skin, G = eyes, B = teeth.
    Face oval + protected regions (eyes, brows, mouth, nostrils) + soft beard/jaw attenuation.
+   Runs identically on the main thread (HTMLCanvasElement) and inside a worker (OffscreenCanvas).
    ES module. */
 
 var FACE_OVAL = [
@@ -16,6 +17,14 @@ var MOUTH_OUTER = [0, 17, 61, 291, 37, 84, 314, 267];
 var MOUTH_INNER_TOP = 13;   // inner upper lip center
 var MOUTH_INNER_BOTTOM = 14; // inner lower lip center
 var NOSTRILS = [98, 327];
+
+function newCanvas(w, h) {
+  if (typeof document === 'undefined' || !document) return new OffscreenCanvas(w, h);
+  var c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return c;
+}
 
 function pt(lms, i, procW, procH) {
   var p = lms[i];
@@ -41,10 +50,12 @@ function ellipse(ctx, cx, cy, rx, ry) {
   ctx.fill();
 }
 
-export function buildMaskCanvas(landmarks, procW, procH) {
-  var canvas = document.createElement('canvas');
-  canvas.width = procW;
-  canvas.height = procH;
+/* landmarks: array of {x,y} normalized 0..1. target: optional reusable canvas (main thread).
+   No 2D blur here: the GL composite bilinearly upscales the mask texture, feathering the edges. */
+export function buildMaskCanvas(landmarks, procW, procH, target) {
+  var canvas = target || newCanvas(procW, procH);
+  if (canvas.width !== procW) canvas.width = procW;
+  if (canvas.height !== procH) canvas.height = procH;
   var ctx = canvas.getContext('2d');
   if (!ctx) return null;
   ctx.clearRect(0, 0, procW, procH);
@@ -120,19 +131,12 @@ export function buildMaskCanvas(landmarks, procW, procH) {
     }
   }
 
-  // --- feather: soften mask edges (works in Chrome/Firefox/Safari 16.4+) ---
-  try {
-    ctx.filter = 'blur(3px)';
-    ctx.drawImage(canvas, 0, 0);
-    ctx.filter = 'none';
-  } catch (e) {}
-
   return canvas;
 }
 
-/* Builds a blank mask (nothing detected yet). */
-export function emptyMask(procW, procH) {
-  var canvas = document.createElement('canvas');
+/* Builds a blank mask (nothing detected yet). target: optional reusable canvas. */
+export function emptyMask(procW, procH, target) {
+  var canvas = target || newCanvas(procW, procH);
   canvas.width = procW;
   canvas.height = procH;
   var ctx = canvas.getContext('2d');

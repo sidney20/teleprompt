@@ -1170,6 +1170,9 @@ body { min-height: 100dvh; }
     scrolling: false,
     raf: null,
     composeRaf: null,
+    rvfc: null,
+    supportsRVFC: undefined,
+    debug: false,
     canvas: null,
     lastBlobUrl: null,
     fileExt: 'mp4',
@@ -2346,12 +2349,16 @@ $('speed-range').addEventListener('input', function () {
 
   function ensureCompose() {
     if (state.composeRaf) { cancelAnimationFrame(state.composeRaf); state.composeRaf = null; }
+    if (state.rvfc) { try { cam.cancelVideoFrameCallback(state.rvfc); } catch (e) {} state.rvfc = null; }
     if (!state.textInVideo && !state.recording && !state.beautyPreview) return;
+    if (state.supportsRVFC === undefined) state.supportsRVFC = !!(cam && typeof cam.requestVideoFrameCallback === 'function');
+    if (state.debug === undefined) state.debug = /[?&]debug=1/.test(location.search);
     var lastT = performance.now();
     var skip = 0;
+    var stT = 0, stN = 0, stFps = 0;
     function draw(now) {
-      if (now - lastT >= 33) {
-        if (skip > 0) { skip--; }
+      if (now - lastT >= (state.supportsRVFC ? 28 : 33)) {
+        if (skip > 0 && !state.recording) skip--;
         else {
           var t0 = performance.now();
           drawCompose();
@@ -2360,10 +2367,22 @@ $('speed-range').addEventListener('input', function () {
           if (cost > 42) skip = state.recording ? 0 : 1;
         }
       }
-      state.composeRaf = requestAnimationFrame(draw);
+      if (state.debug) {
+        stN++;
+        if (stT === 0) stT = now;
+        if (now - stT >= 1000) { stFps = Math.round(stN * 1000 / (now - stT)); stT = now; stN = 0; }
+        if (window.__tpPerfTick === undefined) window.__tpPerfTick = 0;
+        if (now - window.__tpPerfTick >= 500) {
+          window.__tpPerfTick = now;
+          window.__tpPerf = Object.assign({ compFps: stFps }, BeautyAppObj ? BeautyAppObj.getPerf() : { mode: null });
+        }
+      }
+      if (state.supportsRVFC && cam.requestVideoFrameCallback) state.rvfc = cam.requestVideoFrameCallback(draw);
+      else state.composeRaf = requestAnimationFrame(draw);
     }
     drawCompose();
-    state.composeRaf = requestAnimationFrame(draw);
+    if (state.supportsRVFC && cam.requestVideoFrameCallback) state.rvfc = cam.requestVideoFrameCallback(draw);
+    else state.composeRaf = requestAnimationFrame(draw);
   }
 
   function drawCompose() {
@@ -2383,7 +2402,7 @@ $('speed-range').addEventListener('input', function () {
     ctx.filter = 'none';
     ctx.restore();
     if (beautyActiveForFrame() && BeautyAppObj && BeautyAppObj.isModelReady()) {
-      BeautyAppObj.frame(state.canvas, ctx, c.width, c.height, state.mirror, state.beauty);
+      BeautyAppObj.frame(cam, ctx, c.width, c.height, state.mirror, state.beauty);
       if (state.beautyPreview) updateBeautyStatus(BeautyAppObj.hasFaces() ? 'Rosto detectado' : 'Nenhum rosto detectado');
     }
     if (state.beautyPreview) writeBeautyPreview();

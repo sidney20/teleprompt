@@ -1,4 +1,4 @@
-const CACHE = 'teleprompt-v35';
+const CACHE = 'teleprompt-v36';
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './beauty/beauty-shaders.js',
   './beauty/skin-mask.js',
   './beauty/face-tracker.js',
+  './beauty/face-worker.js',
   './beauty/beauty-gl.js',
   './beauty/beauty-app.js'
 ];

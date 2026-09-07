@@ -1,10 +1,12 @@
 /* Beauty WebGL engine. ES module.
    Renders a beauty pass on top of the composed 2D canvas.
-   - uFrame  : full-res frame texture (uploaded from the 2D canvas element)
-   - uMask   : RGBA mask texture where R=skin, G=eyes, B=teeth
-   - blur    : separable bilateral passes into half-res FBOs, then upscaled composite
-   - output  : gl.canvas (drawImage-able into the 2D canvas / recorded stream)
-*/
+   - source : HTMLVideoElement (uploaded directly, no CPU canvas copy) or a canvas
+   - uFrame : source-res texture (camera / canvas)
+   - uMask  : RGBA mask texture where R=skin, G=eyes, B=teeth (updated only on new detections)
+   - blur   : separable bilateral passes into half-res FBOs
+   - composite : cover-crops (uCrop) + mirrors (uMirror) + mixes by mask and settings
+   - output : gl.canvas at outW×outH (drawImage-able into the 2D canvas / recorded stream)
+   Everything (textures/FBOs/programs) is allocated once and reused. */
 import { BEAUTY_VERT, BEAUTY_BLUR_FRAG, BEAUTY_COMPOSE_FRAG } from './beauty-shaders.js';
 
 function compile(gl, type, src) {
@@ -44,8 +46,10 @@ export class BeautyGL {
       || this.canvas.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: false, preserveDrawingBuffer: true });
     if (!this.gl) throw new Error('webgl-unavailable');
     this.procScale = procScale > 0 ? procScale : 0.5;
-    this.W = 0; this.H = 0;
-    this.procW = 0; this.procH = 0;
+    this.W = 0; this.H = 0;            // output canvas size
+    this.srcW = 0; this.srcH = 0;      // source texture size
+    this.procW = 0; this.procH = 0;    // render (mask/blur) size
+    this.maskBound = null;             // identity of last uploaded mask
     this.initGL();
   }
 
@@ -62,9 +66,15 @@ export class BeautyGL {
 
     this.frameTex = this.createTexture();
     this.maskTex = this.createTexture();
-
     this.fb1 = this.createFBO();
     this.fb2 = this.createFBO();
+  }
+
+  setProcScale(scale) {
+    var s = scale > 0 ? scale : 0.5;
+    if (s === this.procScale && this.W > 0) return;
+    this.procScale = s;
+    this.W = 0; // force re-allocation on next process
   }
 
   enableAttrib(attr) {
@@ -103,66 +113,84 @@ export class BeautyGL {
     }
   }
 
-  ensureSize(w, h) {
-    if (this.W === w && this.H === h) return;
+  ensureSize(outW, outH, srcW, srcH) {
+    if (this.W === outW && this.H === outH && this.srcW === srcW && this.srcH === srcH) return;
     var gl = this.gl;
-    this.W = w; this.H = h;
-    this.procW = Math.max(2, Math.round(w * this.procScale));
-    this.procH = Math.max(2, Math.round(h * this.procScale));
-    if (this.canvas.width !== w) this.canvas.width = w;
-    if (this.canvas.height !== h) this.canvas.height = h;
-    this.resize(this.frameTex, w, h, null);
+    this.W = outW; this.H = outH;
+    this.srcW = srcW; this.srcH = srcH;
+    this.procW = Math.max(2, Math.round(outW * this.procScale));
+    this.procH = Math.max(2, Math.round(outH * this.procScale));
+    if (this.canvas.width !== outW) this.canvas.width = outW;
+    if (this.canvas.height !== outH) this.canvas.height = outH;
+    this.resize(this.frameTex, srcW, srcH, null);
     this.resize(this.maskTex, this.procW, this.procH, null);
     this.resize(this.fb1.tex, this.procW, this.procH, this.fb1.fbo);
     this.resize(this.fb2.tex, this.procW, this.procH, this.fb2.fbo);
+    this.maskBound = null;
   }
 
   isReady() { return this.W > 0; }
 
-  /* source: the composed 2D canvas; mask: mask canvas (may be null). Returns true if rendered. */
-  process(source, mask, settings) {
-    if (!source || !source.width || !source.height) return false;
+  /* Cover-crop mapping from output UVs onto the source texture (normalized [x,y,w,h]). */
+  cropUv(outW, outH, srcW, srcH) {
+    var scale = Math.max(outW / srcW, outH / srcH);
+    var srcW2 = srcW * scale, srcH2 = srcH * scale;
+    var offX = Math.max(0, (srcW - srcW2) / 2);
+    var offY = Math.max(0, (srcH - srcH2) / 2);
+    return [offX / srcW, offY / srcH, srcW2 / srcW, srcH2 / srcH];
+  }
+
+  /* source: HTMLVideoElement or canvas. mask: mask image (may be null). Returns true if rendered. */
+  process(source, mask, settings, opts) {
+    if (!source) return false;
     var gl = this.gl;
-    var w = source.width, h = source.height;
-    this.ensureSize(w, h);
+    var srcW = typeof source.videoWidth === 'number' && source.videoWidth ? source.videoWidth : source.width;
+    var srcH = typeof source.videoHeight === 'number' && source.videoHeight ? source.videoHeight : source.height;
+    if (!srcW || !srcH) return false;
+    opts = opts || {};
+    var outW = opts.outW || srcW, outH = opts.outH || srcH;
+    if (!outW || !outH) return false;
+    this.ensureSize(outW, outH, srcW, srcH);
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
 
-    // 1) upload frame texture (YT flip like top-left canvas coords)
+    // 1) upload source texture (top-left canvas/video coords)
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.frameTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
 
-    if (mask) {
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    // 2) upload mask texture only when a new one arrived
+    var needMask = mask && (!opts.skipMaskUpload || this.maskBound !== mask);
+    if (needMask) {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mask);
+      this.maskBound = mask;
     }
 
     var sigma = 1.6 + 6.0 * (settings.smooth / 100) * (settings.beauty / 100);
     var edge = 2.0 + 14.0 * (settings.beauty / 100);
 
-    // 2) horizontal blur -> fb1
+    // 3) horizontal blur -> fb1 (render at proc res)
     this.useProg(this.blurProg, this.frameTex, 0);
-    gl.uniform2f(this.uniformLoc(this.blurProg, 'uTexel'), 1 / this.W, 1 / this.H);
+    gl.uniform2f(this.uniformLoc(this.blurProg, 'uTexel'), 1 / this.srcW, 1 / this.srcH);
     gl.uniform2f(this.uniformLoc(this.blurProg, 'uDir'), 1, 0);
     gl.uniform1f(this.uniformLoc(this.blurProg, 'uSigma'), sigma);
     gl.uniform1f(this.uniformLoc(this.blurProg, 'uEdge'), edge);
     this.drawTo(this.fb1);
 
-    // 3) vertical blur -> fb2
+    // 4) vertical blur -> fb2
     this.useProg(this.blurProg, this.fb1.tex, 0);
-    gl.uniform2f(this.uniformLoc(this.blurProg, 'uTexel'), 1 / this.W, 1 / this.H);
+    gl.uniform2f(this.uniformLoc(this.blurProg, 'uTexel'), 1 / this.srcW, 1 / this.srcH);
     gl.uniform2f(this.uniformLoc(this.blurProg, 'uDir'), 0, 1);
     gl.uniform1f(this.uniformLoc(this.blurProg, 'uSigma'), sigma);
     gl.uniform1f(this.uniformLoc(this.blurProg, 'uEdge'), edge);
     this.drawTo(this.fb2);
 
-    // 4) composite to default framebuffer
+    // 5) composite to default framebuffer (outW×outH)
     gl.viewport(0, 0, this.W, this.H);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.useProgram(this.composeProg);
@@ -174,25 +202,25 @@ export class BeautyGL {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.fb2.tex);
     gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
+    gl.bindTexture(gl.TEXTURE_2D, mask ? this.maskTex : this.frameTex);
     gl.uniform1i(this.uniformLoc(this.composeProg, 'uFrame'), 0);
     gl.uniform1i(this.uniformLoc(this.composeProg, 'uBase'), 1);
     gl.uniform1i(this.uniformLoc(this.composeProg, 'uMask'), 2);
-    // NOTE: compose samples uBase/uMask with the full-res UV; their textures were
-    // allocated at procW/procH so bilinear filtering rescales them up automatically.
+    var crop = this.cropUv(outW, outH, srcW, srcH);
+    gl.uniform4f(this.uniformLoc(this.composeProg, 'uCrop'), crop[0], crop[1], crop[2], crop[3]);
+    gl.uniform1f(this.uniformLoc(this.composeProg, 'uMirror'), opts.mirror ? 1 : 0);
 
     var s = settings;
     gl.uniform1f(this.uniformLoc(this.composeProg, 'uBeauty'), s.beauty / 100);
     gl.uniform1f(this.uniformLoc(this.composeProg, 'uSmooth'), s.smooth / 100);
-    gl.uniform1f(this.uniformLoc(this.composeProg, 'uRetouch'), s.retouch / 100);
+    gl.uniform1f(this.uniformLoc(this.composeProg, 'uRetouch'), opts.effects > 1 ? 0 : s.retouch / 100);
     gl.uniform1f(this.uniformLoc(this.composeProg, 'uEyes'), s.eyes / 100);
     gl.uniform1f(this.uniformLoc(this.composeProg, 'uTeeth'), s.teeth / 100);
     gl.uniform1f(this.uniformLoc(this.composeProg, 'uLight'), s.light / 100);
-    gl.uniform1f(this.uniformLoc(this.composeProg, 'uUniform'), s.uniform / 100);
+    gl.uniform1f(this.uniformLoc(this.composeProg, 'uUniform'), opts.effects > 0 ? 0 : s.uniform / 100);
     this.drawTo(null);
 
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     return true;
   }
 
@@ -229,7 +257,7 @@ export class BeautyGL {
   dispose() {
     var gl = this.gl;
     try {
-      if (gl.getExtension) {
+      if (gl && gl.getExtension) {
         var ext = gl.getExtension('WEBGL_lose_context');
         if (ext) ext.loseContext();
       }
@@ -240,5 +268,6 @@ export class BeautyGL {
     this.frameTex = this.maskTex = null;
     this.quad = null;
     this.blurProg = this.composeProg = null;
+    this.maskBound = null;
   }
 }

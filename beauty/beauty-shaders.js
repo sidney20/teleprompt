@@ -59,13 +59,17 @@ export var BEAUTY_BLUR_FRAG = [
   '}'
 ].join('\n');
 
-/* Final composite: mixes blurred base with original driven by skin/eyes/teeth masks and settings. */
+/* Final composite: mixes blurred base with original driven by skin/eyes/teeth masks and settings.
+   uCrop maps the output quad onto the cover-cropped region of the camera texture
+   (x, y, w, h in normalized camera UV space). uMirror flips the horizontal axis. */
 export var BEAUTY_COMPOSE_FRAG = [
   'precision highp float;',
   'varying vec2 vUv;',
   'uniform sampler2D uFrame;',
   'uniform sampler2D uBase;',
   'uniform sampler2D uMask;',
+  'uniform vec4 uCrop;',
+  'uniform float uMirror;',
   'uniform float uBeauty;',
   'uniform float uSmooth;',
   'uniform float uRetouch;',
@@ -74,9 +78,12 @@ export var BEAUTY_COMPOSE_FRAG = [
   'uniform float uLight;',
   'uniform float uUniform;',
   'void main(){',
-  '  vec3 orig = texture2D(uFrame, vUv).rgb;',
-  '  vec3 base = texture2D(uBase, vUv).rgb;',
-  '  vec3 m = texture2D(uMask, vUv).rgb;',
+  '  vec2 p = vUv;',
+  '  if (uMirror > 0.5) p.x = 1.0 - p.x;',
+  '  vec2 uvv = uCrop.xy + p * uCrop.zw;',
+  '  vec3 orig = texture2D(uFrame, uvv).rgb;',
+  '  vec3 base = texture2D(uBase, uvv).rgb;',
+  '  vec3 m = texture2D(uMask, uvv).rgb;',
   '  float skin = clamp(m.r, 0.0, 1.0);',
   '  float eyes = clamp(m.g, 0.0, 1.0);',
   '  float teeth = clamp(m.b, 0.0, 1.0);',
