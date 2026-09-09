@@ -246,7 +246,17 @@ body { min-height: 100dvh; }
   background: linear-gradient(180deg, rgba(0,0,0,.55), transparent);
 }
 .reader-top .rt-title { flex: 1; font-size: .86rem; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-top .rt-actions { display: flex; align-items: center; gap: 8px; }
 .reader-top .timer { font-size: .9rem; font-weight: 800; font-variant-numeric: tabular-nums; background: rgba(0,0,0,.4); border-radius: 20px; padding: 6px 12px; border: 1px solid rgba(255,255,255,.15); }
+.chat-badge {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 18px; height: 18px; border-radius: 10px;
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  color: #fff; font-size: .66rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 5px; box-shadow: 0 2px 8px rgba(239,68,68,.5);
+}
+#btn-chat { position: relative; }
 
 #reader-controls {
   padding: 10px;
@@ -726,6 +736,20 @@ body { min-height: 100dvh; }
 }
 .name-input::placeholder { color: rgba(255,255,255,.35); }
 .name-input:focus { border-color: #8b5cf6; }
+.name-error { color: #f87171; font-size: .78rem; font-weight: 600; margin-top: -8px; margin-bottom: 10px; min-height: 1em; }
+.chat-msgs { max-height: 46vh; overflow-y: auto; padding: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.chat-bubble { max-width: 85%; padding: 9px 13px; border-radius: 16px; font-size: .84rem; line-height: 1.45; word-wrap: break-word; }
+.chat-bubble.me { align-self: flex-end; background: linear-gradient(135deg, rgba(99,102,241,.85), rgba(139,92,246,.85)); color: #fff; border-bottom-right-radius: 4px; }
+.chat-bubble.you { align-self: flex-start; background: rgba(255,255,255,.1); color: #e5e7eb; border-bottom-left-radius: 4px; }
+.chat-bubble .cb-name { display: block; font-size: .66rem; font-weight: 700; color: rgba(255,255,255,.6); margin-bottom: 2px; }
+.chat-bubble .cb-time { display: block; font-size: .64rem; color: rgba(255,255,255,.45); margin-top: 4px; }
+.row-gap { display: flex; align-items: center; gap: 8px; }
+.chat-input { flex: 1; margin: 0; }
+#chat-modal .mbtns, #support-modal .mbtns { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 14px; }
+.support-area { width: 100%; min-height: 110px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 12px; color: #fff; font-size: .88rem; outline: none; resize: vertical; font-family: inherit; }
+.support-area:focus { border-color: rgba(139,92,246,.5); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
+.attach-btn { cursor: pointer; }
+.mbtns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 
 .inst-block { background: rgba(255,255,255,.05); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
 .inst-block .ib-title { font-size: .74rem; text-transform: uppercase; letter-spacing: .5px; color: #c4b5fd; font-weight: 700; margin-bottom: 8px; }
@@ -836,7 +860,13 @@ body { min-height: 100dvh; }
     <div class="reader-top">
       <button class="icon-btn" id="btn-back-scripts" title="Voltar aos roteiros">&#8592;</button>
       <div class="rt-title" id="reader-title"></div>
-      <div class="timer" id="timer">00:00</div>
+      <div class="rt-actions">
+        <button class="icon-btn" id="btn-support" title="Suporte">&#9993;</button>
+        <button class="icon-btn" id="btn-chat" title="Mensagens do dono">
+          <span id="chat-badge" class="chat-badge hidden">1</span>&#128172;
+        </button>
+        <div class="timer" id="timer">00:00</div>
+      </div>
     </div>
 
     <div class="ctrl-wrap" id="ctrl-wrap">
@@ -1067,8 +1097,42 @@ body { min-height: 100dvh; }
     <h2>Qual é o seu nome?</h2>
     <p class="desc">Preencha uma única vez. O dono do app usa seu nome para saber quem está usando o teleprompt.</p>
     <input class="name-input" id="name-input" type="text" maxlength="40" placeholder="Digite seu nome" autocomplete="name">
+    <div class="name-error" id="name-error"></div>
     <div class="mbtns">
       <button class="mbtn" id="name-submit">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL CHAT ============ -->
+<div class="modal-overlay" id="chat-modal">
+  <div class="modal">
+    <h2>&#128172; Mensagens</h2>
+    <p class="desc">Conversa directa com o dono do app.</p>
+    <div class="chat-msgs" id="chat-msgs"></div>
+    <div class="mbtns row-gap">
+      <input class="name-input chat-input" id="chat-input" type="text" maxlength="500" placeholder="Escreva sua mensagem..." autocomplete="off">
+      <button class="mbtn" id="chat-send">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL SUPORTE ============ -->
+<div class="modal-overlay" id="support-modal">
+  <div class="modal">
+    <h2>&#9993; Suporte</h2>
+    <p class="desc">Descreva o problema. Você pode anexar uma imagem (opcional). O dono recebe e responde pelo chat.</p>
+    <textarea class="support-area" id="support-msg" maxlength="2000" placeholder="Descreva o que aconteceu..."></textarea>
+    <div class="row-gap" style="margin-top:10px">
+      <label class="mbtn ghost attach-btn">&#128206; Anexar imagem
+        <input type="file" id="support-file" accept="image/*" hidden>
+      </label>
+      <span class="muted" id="support-fname"></span>
+    </div>
+    <div class="name-error" id="support-error"></div>
+    <div class="mbtns">
+      <button class="mbtn" id="support-send">Enviar</button>
+      <button class="mbtn ghost" id="support-close">Fechar</button>
     </div>
   </div>
 </div>
@@ -1491,8 +1555,10 @@ body { min-height: 100dvh; }
   /* ---------- Telemetria & registro de nome (Firebase) ---------- */
   var TP = {
     nameKey: 'teleprompt_name',
+    deviceKey: 'teleprompt_device_id',
     name: null,
     uid: null,
+    deviceId: null,
     db: null,
     ready: false,
     auth: null,
@@ -1506,6 +1572,42 @@ body { min-height: 100dvh; }
       appId: "1:337476542022:web:595640b2f99d5d2fddf447"
     }
   };
+
+  function tpGenDeviceId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  function tpEnsureDeviceId() {
+    var id = localStorage.getItem(TP.deviceKey);
+    if (!id) { id = tpGenDeviceId(); try { localStorage.setItem(TP.deviceKey, id); } catch (e) {} }
+    TP.deviceId = id;
+    return id;
+  }
+
+  var TP_BLOCKED_NAMES = ['a','b','c','ok','sim','nao','no','hi','hey','test','teste','teste1','teste2','user','usuario','admin','root','teste123','123','1234','12345','abc','aaa','bbb','qqq','xxx','aaa1','ddd','fff'];
+  function tpValidateName(raw) {
+    var v = (raw || '').trim();
+    if (v.length < 3) return 'Nome precisa de pelo menos 3 letras.';
+    if (/^\d+$/.test(v)) return 'Nome não pode ser só números.';
+    if (TP_BLOCKED_NAMES.indexOf(v.toLowerCase()) >= 0) return 'Escolha um nome mais específico.';
+    return null;
+  }
+  function tpNormalizeName(raw) {
+    var v = (raw || '').trim().replace(/\s+/g, ' ');
+    return v.charAt(0).toUpperCase() + v.slice(1);
+  }
+  function tpDebug(msg) {
+    try {
+      if (domainDebugMode()) console.log('[teleprompt] ' + msg);
+    } catch (e) {}
+  }
+  function domainDebugMode() {
+    try { return typeof state !== 'undefined' && state.debug; } catch (e) { return false; }
+  }
 
   function tpUa() {
     var s = '';
@@ -1527,13 +1629,15 @@ body { min-height: 100dvh; }
     TP.loading = new Promise(function (resolve) {
       var need = ['https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
                   'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
-                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'];
+                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js',
+                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js'];
       var rem = need.length;
       function done() { rem--; if (rem === 0) {
         try {
           firebase.initializeApp(TP.cfg);
           TP.auth = firebase.auth();
           TP.db = firebase.firestore();
+          TP.storage = firebase.storage();
           TP.ready = true;
         } catch (e) {}
         resolve(TP.db);
@@ -1554,6 +1658,7 @@ body { min-height: 100dvh; }
     var payload = Object.assign({ ts: Date.now() }, data);
     if (TP.uid) payload.userId = TP.uid;
     if (TP.name) payload.userName = TP.name;
+    if (TP.deviceId) payload.device_id = TP.deviceId;
     try {
       var rec = TP.db.collection(collection).add(payload);
       if (!keep) rec.catch(function () {});
@@ -1565,9 +1670,17 @@ body { min-height: 100dvh; }
   }
 
   function tpAutoInit() {
+    tpEnsureDeviceId();
     TP.name = localStorage.getItem(TP.nameKey) || null;
-    if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); return; }
+    if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); tpStartHeartbeat(); return; }
     tpShowNameModal();
+  }
+
+  function tpStartHeartbeat() {
+    setInterval(function () {
+      if (!TP.db || !TP.uid) return;
+      try { TP.db.collection('users').doc(TP.uid).update({ lastSeen: Date.now() }).catch(function () {}); } catch (e) {}
+    }, 60000);
   }
 
   function tpLogin() {
@@ -1579,10 +1692,11 @@ body { min-height: 100dvh; }
           TP.uid = res.user.uid;
           var now = Date.now();
           var me = TP.db.collection('users').doc(TP.uid);
-          var data = Object.assign({ name: TP.name, admin: false, firstSeen: now, lastSeen: now }, tpMeta());
+          var data = Object.assign({ name: TP.name, admin: false, firstSeen: now, lastSeen: now, device_id: TP.deviceId || null }, tpMeta());
           return me.set(data, { merge: true }).then(function () {
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
+            tpChatInit();
           }).catch(function (err) {
             tpDebug('Falha ao salvar: ' + (err && err.code ? err.code : err));
             return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
@@ -1598,16 +1712,22 @@ body { min-height: 100dvh; }
     var m = $('name-modal');
     var input = $('name-input');
     var btn = $('name-submit');
+    var errEl = $('name-error');
     function submit() {
-      var v = (input.value || '').trim();
-      if (!v) { input.focus(); return; }
+      var raw = input.value || '';
+      var err = tpValidateName(raw);
+      if (err) { if (errEl) errEl.textContent = err; input.focus(); return; }
+      if (errEl) errEl.textContent = '';
+      var v = tpNormalizeName(raw);
       TP.name = v;
       try { localStorage.setItem(TP.nameKey, v); } catch (e) {}
       m.classList.remove('visible');
       tpLogin();
       tpRecord('sessions', { action: 'open' });
+      tpStartHeartbeat();
     }
     input.value = '';
+    if (errEl) errEl.textContent = '';
     btn.onclick = submit;
     input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
     m.classList.add('visible');
@@ -1616,6 +1736,119 @@ body { min-height: 100dvh; }
 
   window.addEventListener('error', function (e) { tpLog('js', e.message, { source: e.filename || '', line: e.lineno }); });
   window.addEventListener('unhandledrejection', function (e) { tpLog('promise', e.reason && e.reason.message ? e.reason.message : 'unhandled rejection'); });
+
+  /* ---------- Chat suporte (mensagens com o dono) ---------- */
+  var TPC = { unsub: null, lastRead: 0 };
+  function tpChatInit() {
+    var chatBtn = $('btn-chat');
+    if (!chatBtn || !TP.db || !TP.uid) return;
+    TPC.unsub = TP.db.collection('messages')
+      .where('userId', '==', TP.uid)
+      .orderBy('ts', 'desc')
+      .limit(200)
+      .onSnapshot(function (snap) {
+        TPC.msgs = [];
+        snap.forEach(function (d) { var m = d.data(); m.id = d.id; TPC.msgs.push(m); });
+        TPC.msgs.reverse();
+        var unread = TPC.msgs.filter(function (m) { return m.from === 'admin' && !m.read; }).length;
+        var badge = $('chat-badge');
+        if (badge) { badge.textContent = unread > 9 ? '9+' : unread; badge.classList.toggle('hidden', unread === 0); }
+        tpChatRender();
+      }, function () {});
+  }
+  function tpChatRender() {
+    var box = $('chat-msgs');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!TPC.msgs || !TPC.msgs.length) {
+      box.innerHTML = '<div class="muted" style="padding:12px;text-align:center">Nenhuma mensagem ainda.</div>';
+      return;
+    }
+    TPC.msgs.forEach(function (m) {
+      var d = new Date(m.ts);
+      var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      var div = document.createElement('div');
+      div.className = 'chat-bubble ' + (m.from === 'admin' ? 'you' : 'me');
+      div.innerHTML = '<span class="cb-name">' + (m.from === 'admin' ? 'Dono' : escUsername(TP.name)) + '</span>' + escChat(m.message) + '<span class="cb-time">' + hm + '</span>';
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+  function escChat(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function escUsername(s) { return escChat(s || 'Você'); }
+  $('btn-chat').addEventListener('click', function () {
+    $('chat-modal').classList.add('visible');
+    $('chat-input').value = '';
+    tpChatRender();
+    if (TP.db && TP.uid && TPC.msgs) {
+      TPC.msgs.forEach(function (m) {
+        if (m.from === 'admin' && !m.read) {
+          TP.db.collection('messages').doc(m.id).update({ read: true }).catch(function () {});
+        }
+      });
+    }
+  });
+  function tpSendMsg() {
+    var input = $('chat-input');
+    var text = (input.value || '').trim();
+    if (!text || !TP.db || !TP.uid) return;
+    input.value = '';
+    TP.db.collection('messages').add({ userId: TP.uid, userName: TP.name || '', from: 'user', message: text.slice(0, 500), read: true, ts: Date.now() }).catch(function () {});
+  }
+  $('chat-send').addEventListener('click', tpSendMsg);
+  $('chat-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') tpSendMsg(); });
+  $('chat-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
+
+  /* ---------- Suporte ---------- */
+  $('btn-support').addEventListener('click', function () {
+    $('support-modal').classList.add('visible');
+    $('support-msg').value = '';
+    $('support-fname').textContent = '';
+    $('support-error').textContent = '';
+    $('support-file').value = '';
+  });
+  $('support-close').addEventListener('click', function () { $('support-modal').classList.remove('visible'); });
+  $('support-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
+  $('support-file').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    $('support-fname').textContent = f ? f.name : '';
+  });
+  $('support-send').addEventListener('click', function () {
+    var msg = ($('support-msg').value || '').trim();
+    if (!msg) { $('support-error').textContent = 'Escreva uma descrição.';
+      return; }
+    if (!TP.db || !TP.uid || !TP.ready) { $('support-error').textContent = 'Sem conexão com o servidor ainda. Tente de novo em instantes.';
+      return; }
+    var file = $('support-file').files && $('support-file').files[0];
+    $('support-send').disabled = true;
+    var after = function (url) {
+      TP.db.collection('support_messages').add({
+        userId: TP.uid,
+        userName: TP.name || '',
+        message: msg.slice(0, 2000),
+        screenshot_url: url || null,
+        status: 'new',
+        ts: Date.now()
+      }).then(function () {
+        $('support-modal').classList.remove('visible');
+        toast('Suporte enviado!');
+      }).catch(function () {
+        $('support-error').textContent = 'Falha ao enviar. Tente de novo.';
+      }).finally(function () { $('support-send').disabled = false; });
+    };
+    if (file) {
+      try {
+        var ref = TP.storage.ref('screenshots/' + TP.uid + '/' + Date.now() + '_' + file.name.replace(/[^\w.\-]/g, ''));
+        ref.put(file).then(function (snap) {
+          return snap.ref.getDownloadURL();
+        }).then(after).catch(function () { after(null); });
+      } catch (e) { after(null); }
+    } else {
+      after(null);
+    }
+  });
 
   /* ---------- Reader ---------- */
   function updateScriptNav() {
@@ -2519,7 +2752,6 @@ $('speed-range').addEventListener('input', function () {
       try { if (rec.state !== 'inactive') rec.stop(); } catch (e) {}
     };
     rec.start();
-    tpRecord('sessions', { action: 'record', res: state.res, fps: state.fps });
     timerEl.textContent = '00:00';
     state.timerSec = 0;
     state.timerInt = setInterval(function () {
@@ -2614,6 +2846,7 @@ $('speed-range').addEventListener('input', function () {
   }
 
   function onRecordingStopped() {
+    tpRecord('sessions', { action: 'record', res: state.res, fps: state.fps, duration: Math.max(0, state.timerSec || 0) });
     if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
     if (state.scrolling) setScrollState(state.scrollY, false);
     var type = (state.recorder && state.recorder.mimeType) || (state.fileExt === 'mp4' ? 'video/mp4' : 'video/webm');
