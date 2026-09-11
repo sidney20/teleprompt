@@ -758,6 +758,7 @@ body { min-height: 100dvh; }
 .chat-input::placeholder { color: rgba(255,255,255,.35); }
 .chat-input:focus { border-color: #8b5cf6; }
 .chat-send-btn { flex-shrink: 0; padding: 12px 20px; }
+.chat-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
 .support-area { width: 100%; min-height: 110px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 12px; color: #fff; font-size: .88rem; outline: none; resize: vertical; font-family: inherit; }
 .support-area:focus { border-color: rgba(139,92,246,.5); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
 .mbtns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
@@ -1121,7 +1122,7 @@ body { min-height: 100dvh; }
     <h2>&#128172; Mensagens</h2>
     <p class="desc">Conversa directa com o dono do app.</p>
     <div class="chat-msgs" id="chat-msgs"></div>
-    <div class="mbtns row-gap">
+    <div class="chat-row">
       <input class="chat-input" id="chat-input" type="text" maxlength="500" placeholder="Escreva sua mensagem..." autocomplete="off">
       <button class="mbtn chat-send-btn" id="chat-send">Enviar</button>
     </div>
