@@ -748,7 +748,6 @@ body { min-height: 100dvh; }
 #chat-modal .mbtns, #support-modal .mbtns { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 14px; }
 .support-area { width: 100%; min-height: 110px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 12px; color: #fff; font-size: .88rem; outline: none; resize: vertical; font-family: inherit; }
 .support-area:focus { border-color: rgba(139,92,246,.5); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
-.attach-btn { cursor: pointer; }
 .mbtns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 
 .inst-block { background: rgba(255,255,255,.05); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
@@ -1121,14 +1120,8 @@ body { min-height: 100dvh; }
 <div class="modal-overlay" id="support-modal">
   <div class="modal">
     <h2>&#9993; Suporte</h2>
-    <p class="desc">Descreva o problema. Você pode anexar uma imagem (opcional). O dono recebe e responde pelo chat.</p>
+    <p class="desc">Descreva o problema. O dono recebe e responde pelo chat.</p>
     <textarea class="support-area" id="support-msg" maxlength="2000" placeholder="Descreva o que aconteceu..."></textarea>
-    <div class="row-gap" style="margin-top:10px">
-      <label class="mbtn ghost attach-btn">&#128206; Anexar imagem
-        <input type="file" id="support-file" accept="image/*" hidden>
-      </label>
-      <span class="muted" id="support-fname"></span>
-    </div>
     <div class="name-error" id="support-error"></div>
     <div class="mbtns">
       <button class="mbtn" id="support-send">Enviar</button>
@@ -1629,15 +1622,13 @@ body { min-height: 100dvh; }
     TP.loading = new Promise(function (resolve) {
       var need = ['https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
                   'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
-                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js',
-                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js'];
+                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'];
       var rem = need.length;
       function done() { rem--; if (rem === 0) {
         try {
           firebase.initializeApp(TP.cfg);
           TP.auth = firebase.auth();
           TP.db = firebase.firestore();
-          TP.storage = firebase.storage();
           TP.ready = true;
         } catch (e) {}
         resolve(TP.db);
@@ -1805,49 +1796,29 @@ body { min-height: 100dvh; }
   $('btn-support').addEventListener('click', function () {
     $('support-modal').classList.add('visible');
     $('support-msg').value = '';
-    $('support-fname').textContent = '';
     $('support-error').textContent = '';
-    $('support-file').value = '';
   });
   $('support-close').addEventListener('click', function () { $('support-modal').classList.remove('visible'); });
   $('support-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
-  $('support-file').addEventListener('change', function () {
-    var f = this.files && this.files[0];
-    $('support-fname').textContent = f ? f.name : '';
-  });
   $('support-send').addEventListener('click', function () {
     var msg = ($('support-msg').value || '').trim();
     if (!msg) { $('support-error').textContent = 'Escreva uma descrição.';
       return; }
     if (!TP.db || !TP.uid || !TP.ready) { $('support-error').textContent = 'Sem conexão com o servidor ainda. Tente de novo em instantes.';
       return; }
-    var file = $('support-file').files && $('support-file').files[0];
     $('support-send').disabled = true;
-    var after = function (url) {
-      TP.db.collection('support_messages').add({
-        userId: TP.uid,
-        userName: TP.name || '',
-        message: msg.slice(0, 2000),
-        screenshot_url: url || null,
-        status: 'new',
-        ts: Date.now()
-      }).then(function () {
-        $('support-modal').classList.remove('visible');
-        toast('Suporte enviado!');
-      }).catch(function () {
-        $('support-error').textContent = 'Falha ao enviar. Tente de novo.';
-      }).finally(function () { $('support-send').disabled = false; });
-    };
-    if (file) {
-      try {
-        var ref = TP.storage.ref('screenshots/' + TP.uid + '/' + Date.now() + '_' + file.name.replace(/[^\w.\-]/g, ''));
-        ref.put(file).then(function (snap) {
-          return snap.ref.getDownloadURL();
-        }).then(after).catch(function () { after(null); });
-      } catch (e) { after(null); }
-    } else {
-      after(null);
-    }
+    TP.db.collection('support_messages').add({
+      userId: TP.uid,
+      userName: TP.name || '',
+      message: msg.slice(0, 2000),
+      status: 'new',
+      ts: Date.now()
+    }).then(function () {
+      $('support-modal').classList.remove('visible');
+      toast('Suporte enviado!');
+    }).catch(function () {
+      $('support-error').textContent = 'Falha ao enviar. Tente de novo.';
+    }).finally(function () { $('support-send').disabled = false; });
   });
 
   /* ---------- Reader ---------- */
