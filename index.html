@@ -256,7 +256,7 @@ body { min-height: 100dvh; }
   display: flex; align-items: center; justify-content: center;
   padding: 0 5px; box-shadow: 0 2px 8px rgba(239,68,68,.5);
 }
-#btn-chat { position: relative; }
+#btn-chat-ctrl { position: relative; }
 
 #reader-controls {
   padding: 10px;
@@ -758,6 +758,10 @@ body { min-height: 100dvh; }
 .chat-input::placeholder { color: rgba(255,255,255,.35); }
 .chat-input:focus { border-color: #8b5cf6; }
 .chat-send-btn { flex-shrink: 0; padding: 12px 20px; }
+.home-actions { display: flex; justify-content: center; margin-top: 16px; }
+.home-support-btn { font-size: .85rem; width: auto; padding: 10px 20px; border-radius: 16px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700; }
+.home-support-btn:active { transform: scale(.96); }
+.ctrl-chat-btn { position: relative; width: 36px; height: 36px; font-size: .95rem; }
 .chat-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
 .support-area { width: 100%; min-height: 110px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 12px; color: #fff; font-size: .88rem; outline: none; resize: vertical; font-family: inherit; }
 .support-area:focus { border-color: rgba(139,92,246,.5); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
@@ -835,6 +839,10 @@ body { min-height: 100dvh; }
       <div id="status" class="status"></div>
     </div>
 
+    <div class="home-actions">
+      <button class="icon-btn home-support-btn" id="btn-support-home" title="Suporte">&#9993; Suporte</button>
+    </div>
+
     <div class="saved-docs" id="saved-docs-wrap" style="display:none">
       <div class="saved-docs-head">
         <h3>Roteiros salvos no aparelho</h3>
@@ -873,10 +881,6 @@ body { min-height: 100dvh; }
       <button class="icon-btn" id="btn-back-scripts" title="Voltar aos roteiros">&#8592;</button>
       <div class="rt-title" id="reader-title"></div>
       <div class="rt-actions">
-        <button class="icon-btn" id="btn-support" title="Suporte">&#9993;</button>
-        <button class="icon-btn" id="btn-chat" title="Mensagens do dono">
-          <span id="chat-badge" class="chat-badge hidden">1</span>&#128172;
-        </button>
         <div class="timer" id="timer">00:00</div>
       </div>
     </div>
@@ -896,6 +900,9 @@ body { min-height: 100dvh; }
           <div class="vu" id="vu"><div class="vu-fill" id="vu-fill"></div></div>
           <button class="rec-btn" id="btn-record" title="Gravar">&#9679;</button>
         </div>
+        <button class="icon-btn ctrl-chat-btn" id="btn-chat-ctrl" title="Mensagens do dono">
+          <span id="chat-badge" class="chat-badge hidden">1</span>&#128172;
+        </button>
         <button class="gear-btn" id="btn-config" title="Configurações">&#9881;</button>
       </div>
     </div>
@@ -1744,7 +1751,7 @@ body { min-height: 100dvh; }
   /* ---------- Chat suporte (mensagens com o dono) ---------- */
   var TPC = { unsub: null, lastRead: 0 };
   function tpChatInit() {
-    var chatBtn = $('btn-chat');
+    var chatBtn = $('btn-chat-ctrl');
     if (!chatBtn || !TP.db || !TP.uid) return;
     TPC.unsub = TP.db.collection('messages')
       .where('userId', '==', TP.uid)
@@ -1782,7 +1789,7 @@ body { min-height: 100dvh; }
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
   }
   function escUsername(s) { return escChat(s || 'Você'); }
-  $('btn-chat').addEventListener('click', function () {
+  $('btn-chat-ctrl').addEventListener('click', function () {
     $('chat-modal').classList.add('visible');
     $('chat-input').value = '';
     tpChatRender();
@@ -1806,7 +1813,7 @@ body { min-height: 100dvh; }
   $('chat-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
 
   /* ---------- Suporte ---------- */
-  $('btn-support').addEventListener('click', function () {
+  $('btn-support-home').addEventListener('click', function () {
     $('support-modal').classList.add('visible');
     $('support-msg').value = '';
     $('support-error').textContent = '';
