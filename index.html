@@ -348,6 +348,36 @@ body { min-height: 100dvh; }
   width: 46px; height: 46px;
   z-index: 6;
 }
+#btn-beauty.on {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  border-color: rgba(139,92,246,.5);
+  box-shadow: 0 0 16px rgba(139,92,246,.4);
+}
+.cfg-beauty-preview {
+  position: relative;
+  background: #111;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 10px 0;
+  aspect-ratio: 9/16;
+  max-height: 220px;
+}
+.cfg-beauty-preview canvas {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cfg-beauty-label {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  font-size: .7rem; font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,.55);
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
 
 .cfg-size { margin-bottom: 4px; }
 
@@ -627,57 +657,6 @@ body { min-height: 100dvh; }
 .cfg-chip.on .chip-name { color: #fff; }
 .fil-done-row { margin-top: 6px; }
 .fil-done-row.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-#beauty-modal .fil-stage { position: relative; background: #000; }
-#beauty-prev {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  object-fit: cover;
-}
-#beauty-status {
-  position: absolute;
-  top: calc(66px + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: .7rem;
-  font-weight: 700;
-  color: #fff;
-  text-shadow: 0 2px 12px rgba(0,0,0,.6);
-  background: rgba(0,0,0,.6);
-  padding: 5px 12px;
-  border-radius: 999px;
-  white-space: nowrap;
-  z-index: 2;
-}
-#beauty-tag {
-  position: absolute;
-  top: calc(18px + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 1rem;
-  font-weight: 800;
-  color: #fff;
-  text-shadow: 0 2px 12px rgba(0,0,0,.6);
-  background: rgba(0,0,0,.45);
-  padding: 6px 16px;
-  border-radius: 999px;
-  z-index: 2;
-}
-#beauty-sliders {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 2px 0;
-}
-#beauty-sliders .sl-left {
-  height: 26px;
-}
-.beauty-note {
-  margin-top: 10px;
-  font-size: .72rem;
-  line-height: 1.5;
-  color: #9ca3af;
-  text-align: center;
-}
 
 /* ---------- MODALS ---------- */
 .modal-overlay {
@@ -1029,6 +1008,22 @@ body { min-height: 100dvh; }
       </div>
     </div>
 
+    <div class="cfg-block">
+      <div class="cfg-head">&#10024; Beleza</div>
+      <div class="cfg-beauty-preview">
+        <canvas id="cfg-beauty-canvas"></canvas>
+        <div class="cfg-beauty-label" id="cfg-beauty-label">Desativada</div>
+      </div>
+      <div class="sw-row" id="btn-beauty-cfg">
+        <span class="sw-ic">&#10024;</span>
+        <span class="sw-tx">
+          <span class="sw-lb">Suavização de pele</span>
+          <span class="sw-hint">ativa o filtro de beleza durante a gravação</span>
+        </span>
+        <span class="switch" aria-hidden="true"></span>
+      </div>
+    </div>
+
     <div class="mbtns">
       <button class="mbtn" id="cfg-close">Concluído</button>
     </div>
@@ -1050,26 +1045,8 @@ body { min-height: 100dvh; }
   </div>
 </div>
 
-<!-- ============ BELEZA ============ -->
-<div id="beauty-modal">
-  <div class="fil-stage">
-    <canvas id="beauty-prev"></canvas>
-    <div id="beauty-status">Preparando a beleza facial...</div>
-    <div id="beauty-tag">Depois</div>
-    <button id="beauty-close-btn" title="Fechar">&#10005;</button>
-  </div>
-  <div class="fil-bottom">
-    <div class="fil-chips" id="beauty-presets"></div>
-    <div id="beauty-sliders"></div>
-    <div class="fil-done-row row-2">
-      <button class="mbtn ghost" id="beauty-ondoff">Antes / Depois</button>
-      <button class="mbtn ghost" id="beauty-reset">&#8634; Natural</button>
-      <button class="mbtn" id="beauty-apply">Aplicar beleza</button>
-      <button class="mbtn ghost" id="beauty-remove">Remover beleza</button>
-    </div>
-    <p class="beauty-note">O efeito é aplicado em tempo real durante a gravação. Os ajustes ficam salvos neste aparelho.</p>
-  </div>
-</div>
+<!-- ============ BELEZA (simplificada) ============ -->
+<!-- modal removido: beleza agora é toggle simples via botão ✨ -->
 
 <!-- ============ MODAL ATUALIZAÇÃO ============ -->
 <div class="modal-overlay" id="update-modal">
@@ -1171,14 +1148,9 @@ body { min-height: 100dvh; }
   }
 
   const BEAUTY_KEYS = ['beauty', 'smooth', 'retouch', 'eyes', 'teeth', 'light', 'uniform'];
+  const BEAUTY_FIXED = { beauty: 45, smooth: 50, retouch: 0, eyes: 0, teeth: 0, light: 0, uniform: 0 };
   function normBeauty(b) {
-    var o = { enabled: !!b.enabled, preset: (b.preset === 'suave' || b.preset === 'glamour') ? b.preset : 'natural' };
-    for (var i = 0; i < BEAUTY_KEYS.length; i++) {
-      var k = BEAUTY_KEYS[i];
-      var v = Number(b[k]);
-      o[k] = (isFinite(v)) ? Math.max(0, Math.min(100, v)) : state.beauty[k];
-    }
-    return o;
+    return { enabled: !!b.enabled };
   }
 
   var homeLink = $('doc-link');
@@ -1267,9 +1239,8 @@ body { min-height: 100dvh; }
     canvasStream: null,
     readH: 0.46,
     filterId: 0,
-    beauty: { enabled: false, preset: 'natural', beauty: 35, smooth: 35, retouch: 15, eyes: 10, teeth: 5, light: 10, uniform: 15 },
+    beauty: { enabled: false },
     beautyPreview: false,
-    beautyPrevOn: false,
     res: '478x850',
     fps: 24,
     countdown: 3,
@@ -2293,6 +2264,11 @@ $('speed-range').addEventListener('input', function () {
     }
   });
 
+  $('btn-beauty-cfg').addEventListener('click', function () {
+    toggleBeauty();
+    updateControlLabels();
+  });
+
   $('btn-config').addEventListener('click', function () {
     updateControlLabels();
     syncSegs();
@@ -2390,18 +2366,9 @@ $('speed-range').addEventListener('input', function () {
     applyFilter();
   });
 
-  /* ---------- Beleza ---------- */
+  /* ---------- Beleza (simplificada: toggle ON/OFF) ---------- */
   var BeautyAppObj = null;
   var BeautyMod = null;
-  var BEAUTY_SLIDERS = [
-    { key: 'beauty', label: 'Beleza' },
-    { key: 'smooth', label: 'Suavização' },
-    { key: 'retouch', label: 'Retoque' },
-    { key: 'eyes', label: 'Olhos' },
-    { key: 'teeth', label: 'Dentes' },
-    { key: 'light', label: 'Iluminação' },
-    { key: 'uniform', label: 'Uniformização' }
-  ];
 
   function ensureBeautyModules() {
     if (BeautyAppObj) return Promise.resolve(BeautyAppObj);
@@ -2417,142 +2384,43 @@ $('speed-range').addEventListener('input', function () {
   }
 
   function beautyActiveForFrame() {
-    if (state.beautyPreview) return state.beautyPrevOn;
     return state.beauty.enabled;
   }
 
-  function updateBeautyStatus(msg) {
-    var st = $('beauty-status');
-    if (msg) { st.textContent = msg; st.style.display = 'block'; }
-    else st.style.display = 'none';
+  function getBeautySettings() {
+    return BEAUTY_FIXED;
   }
 
-  function buildBeautyUI() {
-    var presets = BeautyMod ? BeautyMod.PRESETS : { natural: { label: 'Natural' }, suave: { label: 'Suave' }, glamour: { label: 'Glamour' } };
-    var chipsWrap = $('beauty-presets');
-    chipsWrap.innerHTML = '';
-    Object.keys(presets).forEach(function (name) {
-      var b = document.createElement('div');
-      b.className = 'cfg-chip' + (state.beauty.preset === name ? ' on' : '');
-      b.dataset.preset = name;
-      b.innerHTML = '<div class="dot" style="background:linear-gradient(135deg,#f0abfc,#8b5cf6);"></div><span class="chip-name">' + presets[name].label + '</span>';
-      chipsWrap.appendChild(b);
-    });
-    var sl = $('beauty-sliders');
-    sl.innerHTML = '';
-    BEAUTY_SLIDERS.forEach(function (item) {
-      var row = document.createElement('div');
-      row.className = 'sl-row';
-      row.innerHTML = '<label>' + item.label + '</label><input type="range" min="0" max="100" step="1" value="' + state.beauty[item.key] + '" data-key="' + item.key + '"><span class="sl-val">' + state.beauty[item.key] + '</span>';
-      sl.appendChild(row);
-    });
-  }
-
-  function syncSliderValues() {
-    var ins = $('beauty-sliders').querySelectorAll('input[type=range]');
-    for (var i = 0; i < ins.length; i++) {
-      var key = ins[i].dataset.key;
-      ins[i].value = state.beauty[key];
-      ins[i].parentElement.querySelector('.sl-val').textContent = state.beauty[key];
-    }
-    syncChipPresets();
-  }
-
-  function syncChipPresets() {
-    var chips = $('beauty-presets').querySelectorAll('.cfg-chip');
-    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle('on', chips[i].dataset.preset === state.beauty.preset);
-  }
-
-  function openBeautyModal() {
-    if (!state.stream) { toast('Abra um roteiro para usar a beleza facial'); return; }
-    var m = $('beauty-modal');
-    m.classList.add('visible');
-    state.beautyPreview = true;
-    state.beautyPrevOn = true;
-    $('beauty-tag').textContent = 'Depois';
-    $('beauty-ondoff').classList.add('on');
-    buildBeautyUI();
-    updateBeautyStatus('Carregando modelo de detecção...');
-    ensureBeautyModules().then(function (app) {
-      if (!app) {
-        updateBeautyStatus('Não foi possível carregar a beleza neste aparelho');
-        toast('Beleza indisponível neste aparelho');
-        closeBeautyModal();
-        return;
+  function toggleBeauty() {
+    if (state.recording) { toast('Pare a gravação antes de mudar a beleza'); return; }
+    state.beauty.enabled = !state.beauty.enabled;
+    $('btn-beauty').classList.toggle('on', state.beauty.enabled);
+    saveSettings();
+    if (state.beauty.enabled) {
+      toast('✨ Beleza ativada');
+      if (state.stream) {
+        ensureBeautyModules().then(function (app) {
+          if (app) {
+            BeautyAppObj.setActive(true);
+            BeautyAppObj.setVideoEl(cam);
+            BeautyAppObj.loadModel();
+          }
+        });
       }
-      BeautyAppObj.setActive(true);
-      BeautyAppObj.setVideoEl(cam);
-      updateBeautyStatus('Detectando rosto...');
-      BeautyAppObj.loadModel().then(function (ok) {
-        if (!m.classList.contains('visible')) return;
-        if (ok) updateBeautyStatus(BeautyAppObj.hasFaces() ? 'Rosto detectado' : 'Nenhum rosto detectado');
-        else {
-          updateBeautyStatus('Sem suporte à beleza facial neste aparelho');
-          BeautyAppObj.setActive(false);
-        }
-      });
-    });
-    ensureCompose();
-  }
-
-  function closeBeautyModal() {
-    $('beauty-modal').classList.remove('visible');
-    state.beautyPreview = false;
-    if (BeautyAppObj) BeautyAppObj.setActive(false);
+    } else {
+      toast('✨ Beleza desativada');
+      if (BeautyAppObj) BeautyAppObj.setActive(false);
+    }
     ensureCompose();
   }
 
   function initBeautyUI() {
-    $('btn-beauty').addEventListener('click', openBeautyModal);
-    $('beauty-close-btn').addEventListener('click', closeBeautyModal);
-    $('beauty-ondoff').addEventListener('click', function () {
-      state.beautyPrevOn = !state.beautyPrevOn;
-      $('beauty-tag').textContent = state.beautyPrevOn ? 'Depois' : 'Antes';
-      $('beauty-ondoff').classList.toggle('on', state.beautyPrevOn);
-    });
-    $('beauty-reset').addEventListener('click', function () {
-      if (!BeautyMod) return;
-      var vals = BeautyMod.fromPreset('natural');
-      state.beauty.preset = 'natural';
-      for (var i = 0; i < BEAUTY_KEYS.length; i++) state.beauty[BEAUTY_KEYS[i]] = vals[BEAUTY_KEYS[i]];
-      syncSliderValues();
-      toast('Ajustes de volta ao padrão Natural');
-    });
-    $('beauty-apply').addEventListener('click', function () {
-      state.beauty.enabled = true;
-      saveSettings();
-      if (BeautyAppObj) { BeautyAppObj.setActive(true); BeautyAppObj.setVideoEl(cam); }
-      closeBeautyModal();
-      toast('Beleza aplicada: entra automaticamente nas gravações');
-    });
-    $('beauty-remove').addEventListener('click', function () {
-      state.beauty.enabled = false;
-      saveSettings();
-      closeBeautyModal();
-      toast('Beleza removida');
-    });
-    $('beauty-presets').addEventListener('click', function (e) {
-      var chip = e.target.closest ? e.target.closest('.cfg-chip') : null;
-      if (!chip || !BeautyMod) return;
-      if (state.recording) { toast('Pare a gravação antes de mudar os ajustes'); return; }
-      var vals = BeautyMod.fromPreset(chip.dataset.preset);
-      state.beauty.preset = chip.dataset.preset || 'natural';
-      for (var i = 0; i < BEAUTY_KEYS.length; i++) state.beauty[BEAUTY_KEYS[i]] = vals[BEAUTY_KEYS[i]];
-      syncSliderValues();
-    });
-    $('beauty-sliders').addEventListener('input', function (e) {
-      var inp = e.target;
-      if (!inp.dataset || !inp.dataset.key) return;
-      var key = inp.dataset.key;
-      state.beauty[key] = parseInt(inp.value, 10) || 0;
-      state.beauty.preset = 'custom';
-      syncChipPresets();
-      inp.parentElement.querySelector('.sl-val').textContent = inp.value;
-    });
+    $('btn-beauty').addEventListener('click', toggleBeauty);
+    $('btn-beauty').classList.toggle('on', state.beauty.enabled);
   }
 
   function writeBeautyPreview() {
-    var pv = $('beauty-prev');
+    var pv = $('cfg-beauty-canvas');
     var c = state.canvas;
     if (!pv || !c) return;
     if (pv.width !== c.width) { pv.width = c.width; pv.height = c.height; }
@@ -2562,9 +2430,7 @@ $('speed-range').addEventListener('input', function () {
 
   function disposeBeauty() {
     if (BeautyAppObj) { try { BeautyAppObj.dispose(); } catch (e) {} BeautyAppObj = null; }
-    $('beauty-modal').classList.remove('visible');
     state.beautyPreview = false;
-    state.beautyPrevOn = false;
   }
 
   function updateControlLabels() {
@@ -2574,6 +2440,9 @@ $('speed-range').addEventListener('input', function () {
     $('btn-flip').classList.toggle('on', state.facing === 'environment');
     $('btn-txtvideo').classList.toggle('on', state.textInVideo);
     $('flip-val').textContent = state.facing === 'environment' ? 'Traseira' : 'Frontal';
+    $('btn-beauty-cfg').classList.toggle('on', state.beauty.enabled);
+    var lbl = $('cfg-beauty-label');
+    if (lbl) lbl.textContent = state.beauty.enabled ? 'Ativada' : 'Desativada';
   }
 
   /* ---------- canvas ---------- */
@@ -2587,7 +2456,7 @@ $('speed-range').addEventListener('input', function () {
   function ensureCompose() {
     if (state.composeRaf) { cancelAnimationFrame(state.composeRaf); state.composeRaf = null; }
     if (state.rvfc) { try { cam.cancelVideoFrameCallback(state.rvfc); } catch (e) {} state.rvfc = null; }
-    if (!state.textInVideo && !state.recording && !state.beautyPreview) return;
+    if (!state.textInVideo && !state.recording && !state.beauty.enabled && !state.beautyPreview) return;
     if (state.supportsRVFC === undefined) state.supportsRVFC = !!(cam && typeof cam.requestVideoFrameCallback === 'function');
     state.debug = /[?&]debug=1/.test(location.search);
     var lastT = performance.now();
@@ -2639,8 +2508,7 @@ $('speed-range').addEventListener('input', function () {
     ctx.filter = 'none';
     ctx.restore();
     if (beautyActiveForFrame() && BeautyAppObj && BeautyAppObj.isModelReady()) {
-      BeautyAppObj.frame(cam, ctx, c.width, c.height, state.mirror, state.beauty);
-      if (state.beautyPreview) updateBeautyStatus(BeautyAppObj.hasFaces() ? 'Rosto detectado' : 'Nenhum rosto detectado');
+      BeautyAppObj.frame(cam, ctx, c.width, c.height, state.mirror, getBeautySettings());
     }
     if (state.beautyPreview) writeBeautyPreview();
     if (state.textInVideo) drawTextOverlay(ctx, c.width, c.height);

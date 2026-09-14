@@ -1,42 +1,31 @@
-/* Beauty settings: presets and sanitization. ES module. */
+/* Beauty settings: single fixed preset for skin smoothing. ES module. */
 export var PRESETS = {
-  natural: { label: 'Natural', beauty: 35, smooth: 35, retouch: 15, eyes: 10, teeth: 5, light: 10, uniform: 15 },
-  suave: { label: 'Suave', beauty: 55, smooth: 55, retouch: 30, eyes: 15, teeth: 10, light: 20, uniform: 25 },
-  glamour: { label: 'Glamour', beauty: 75, smooth: 75, retouch: 45, eyes: 20, teeth: 20, light: 30, uniform: 35 }
+  natural: { label: 'Natural', beauty: 45, smooth: 50, retouch: 0, eyes: 0, teeth: 0, light: 0, uniform: 0 }
 };
 
 export var BEAUTY_DEFAULTS = {
   enabled: false,
-  preset: 'natural',
-  beauty: 35, smooth: 35, retouch: 15, eyes: 10, teeth: 5, light: 10, uniform: 15
+  beauty: 45, smooth: 50, retouch: 0, eyes: 0, teeth: 0, light: 0, uniform: 0
 };
-
-var KEYS = ['beauty', 'smooth', 'retouch', 'eyes', 'teeth', 'light', 'uniform'];
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
 
 export function normalizeBeauty(s) {
   s = s || {};
-  var o = {
-    enabled: !!s.enabled,
-    preset: PRESETS[s.preset] ? s.preset : 'natural'
-  };
-  for (var i = 0; i < KEYS.length; i++) {
-    var k = KEYS[i];
-    o[k] = clamp(num(s[k], BEAUTY_DEFAULTS[k]), 0, 100);
-  }
+  var o = { enabled: !!s.enabled };
+  o.beauty = clamp(num(s.beauty, BEAUTY_DEFAULTS.beauty), 0, 100);
+  o.smooth = clamp(num(s.smooth, BEAUTY_DEFAULTS.smooth), 0, 100);
+  o.retouch = 0;
+  o.eyes = 0;
+  o.teeth = 0;
+  o.light = 0;
+  o.uniform = 0;
   return o;
 }
 
-export function fromPreset(name) {
-  var p = PRESETS[name] || PRESETS.natural;
-  var o = { enabled: false, preset: name || 'natural' };
-  for (var i = 0; i < KEYS.length; i++) {
-    var k = KEYS[i];
-    o[k] = p[k];
-  }
-  return o;
+export function fromPreset() {
+  return { enabled: false, beauty: 45, smooth: 50, retouch: 0, eyes: 0, teeth: 0, light: 0, uniform: 0 };
 }
 
 export function beautyValuesForUI(s) {
