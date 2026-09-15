@@ -746,6 +746,36 @@ body { min-height: 100dvh; }
 .support-area:focus { border-color: rgba(139,92,246,.5); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
 .mbtns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 
+.credits-bar {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 8px 12px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px; font-size: .78rem; color: #9ca3af;
+}
+.credits-bar.owner { color: #a78bfa; border-color: rgba(139,92,246,.3); background: rgba(139,92,246,.08); }
+.credits-bar.empty { color: #f87171; border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.08); }
+.credits-bar.loading { opacity: .6; }
+.cr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.cr-dot.on { background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,.5); }
+.cr-dot.off { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.5); }
+
+.pay-modal-inner { max-width: 400px; }
+.pay-products { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.pay-card {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px; padding: 14px; cursor: pointer; transition: all .2s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.pay-card:hover { background: rgba(139,92,246,.1); border-color: rgba(139,92,246,.3); transform: translateY(-1px); }
+.pay-card .pc-info h4 { font-size: .9rem; color: #fff; margin-bottom: 2px; }
+.pay-card .pc-info p { font-size: .72rem; color: #9ca3af; }
+.pay-card .pc-price { font-size: 1.1rem; font-weight: 800; color: #a78bfa; white-space: nowrap; }
+.pay-qr { text-align: center; margin: 14px 0; }
+.pay-qr img { max-width: 200px; border-radius: 12px; background: #fff; padding: 8px; }
+.pay-amount { text-align: center; font-size: 1.2rem; font-weight: 800; color: #fff; margin-top: 8px; }
+.pay-pix-code { display: flex; gap: 6px; margin-top: 10px; }
+.pay-pix-code input { flex: 1; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px 10px; color: #fff; font-size: .75rem; font-family: monospace; }
+.pay-status { text-align: center; margin-top: 12px; font-size: .8rem; color: #f59e0b; animation: pulse 1.2s ease-in-out infinite; }
+
 .inst-block { background: rgba(255,255,255,.05); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
 .inst-block .ib-title { font-size: .74rem; text-transform: uppercase; letter-spacing: .5px; color: #c4b5fd; font-weight: 700; margin-bottom: 8px; }
 .inst-block p { font-size: .84rem; line-height: 1.65; color: #e5e7eb; margin-bottom: 10px; white-space: pre-wrap; }
@@ -816,10 +846,12 @@ body { min-height: 100dvh; }
         <button id="btn-load" class="btn-primary">Carregar</button>
       </div>
       <div id="status" class="status"></div>
+      <div id="credit-display" class="credits-bar loading">Carregando...</div>
     </div>
 
     <div class="home-actions">
       <button class="icon-btn home-support-btn" id="btn-support-home" title="Suporte">&#9993; Suporte</button>
+      <button class="icon-btn home-support-btn" id="btn-buy-home" title="Comprar créditos">&#128176; Comprar</button>
     </div>
 
     <div class="saved-docs" id="saved-docs-wrap" style="display:none">
@@ -1123,6 +1155,27 @@ body { min-height: 100dvh; }
     <div class="mbtns">
       <button class="mbtn" id="support-send">Enviar</button>
       <button class="mbtn ghost" id="support-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal pay-modal-inner">
+    <h2>&#128179; Comprar Créditos</h2>
+    <p class="desc">Escolha um plano para continuar gravando roteiros.</p>
+    <div id="pay-products" class="pay-products"></div>
+    <div id="pay-pix" class="pay-pix" style="display:none">
+      <div class="pay-qr" id="pay-qr"></div>
+      <p class="pay-amount" id="pay-amount"></p>
+      <p class="desc" style="font-size:.75rem;margin-top:8px">Escaneie o QR Code ou copie o código Pix abaixo.</p>
+      <div class="pay-pix-code">
+        <input id="pay-pix-input" readonly>
+        <button class="mbtn" id="pay-pix-copy">Copiar</button>
+      </div>
+      <div class="pay-status" id="pay-status">Aguardando pagamento...</div>
+    </div>
+    <div class="mbtns" style="margin-top:14px">
+      <button class="mbtn ghost" id="pay-close">Fechar</button>
     </div>
   </div>
 </div>
@@ -1540,6 +1593,8 @@ body { min-height: 100dvh; }
   var TP = {
     nameKey: 'teleprompt_name',
     deviceKey: 'teleprompt_device_id',
+    backendUrl: 'https://teleprompt-backend.onrender.com',
+    ownerId: '2c0e91e0-ba88-46da-959b-d047ff7a96a0',
     name: null,
     uid: null,
     deviceId: null,
@@ -1547,6 +1602,8 @@ body { min-height: 100dvh; }
     ready: false,
     client: null,
     queue: [],
+    credits: null,
+    plan: null,
     cfg: {
       url: 'https://winbijssaawvmtmbluix.supabase.co',
       anonKey: 'sb_publishable_Y8WYTANqEOQ5u2x4WXytGQ_1DQ03PLW'
@@ -1649,6 +1706,70 @@ body { min-height: 100dvh; }
     tpRecord('errors', Object.assign({ type: type, message: String(message || '').slice(0, 500) }, extra || {}));
   }
 
+  /* ---------- Backend API (credits, payments) ---------- */
+  function tpBackend(path, method, body) {
+    var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
+    if (TP.uid) opts.headers['Authorization'] = 'Bearer ' + TP.uid;
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(TP.backendUrl + path, opts).then(function (r) { return r.json(); });
+  }
+
+  function tpIsOwner() { return TP.uid === TP.ownerId; }
+
+  function tpHasCredits() {
+    if (tpIsOwner()) return true;
+    return TP.credits && TP.credits.total > 0;
+  }
+
+  function tpUpdateCreditDisplay() {
+    var el = $('credit-display');
+    if (!el) return;
+    if (tpIsOwner()) { el.innerHTML = '<span class="cr-dot on"></span>Acesso ilimitado'; el.className = 'credits-bar owner'; return; }
+    if (TP.credits === null) { el.innerHTML = 'Carregando...'; el.className = 'credits-bar loading'; return; }
+    var n = TP.credits.total || 0;
+    el.innerHTML = '<span class="cr-dot ' + (n > 0 ? 'on' : 'off') + '"></span>' + n + ' roteiro(s) disponível(is)';
+    el.className = 'credits-bar' + (n > 0 ? '' : ' empty');
+  }
+
+  function tpConsumeCredit() {
+    if (tpIsOwner()) return Promise.resolve({ ok: true, remaining: 999 });
+    return tpBackend('/api/credits/consume', 'POST', { amount: 1 }).then(function (res) {
+      if (res.ok && TP.credits) { TP.credits.total = res.remaining; tpUpdateCreditDisplay(); }
+      return res;
+    });
+  }
+
+  function tpLoadCredits() {
+    if (tpIsOwner()) { TP.credits = { total: 999, free: 0, paid: 0 }; tpUpdateCreditDisplay(); return; }
+    return tpBackend('/api/me/credits').then(function (res) {
+      if (res.ok) { TP.credits = res.credits; TP.plan = res.plan || null; }
+      tpUpdateCreditDisplay();
+    }).catch(function () { TP.credits = { total: 0, free: 0, paid: 0 }; tpUpdateCreditDisplay(); });
+  }
+
+  function tpFetchProducts() {
+    return tpBackend('/api/products').then(function (res) { return res.ok ? res.products : []; }).catch(function () { return []; });
+  }
+
+  function tpCreatePayment(productId) {
+    return tpBackend('/api/payments/create', 'POST', { product_id: productId });
+  }
+
+  function tpCheckPayment(paymentId) {
+    return tpBackend('/api/payments/' + paymentId);
+  }
+
+  function tpRegisterAccount() {
+    if (!TP.uid) return Promise.resolve();
+    var meta = tpMeta();
+    return tpBackend('/api/auth/create', 'POST', {
+      uid: TP.uid, name: TP.name, device_id: TP.deviceId,
+      ua: meta.ua, screen: meta.screen, ram: meta.ram
+    }).then(function (res) {
+      if (res.ok) { TP.credits = res.credits; tpUpdateCreditDisplay(); }
+    }).catch(function () {});
+  }
+
   function tpAutoInit() {
     tpEnsureDeviceId();
     TP.name = localStorage.getItem(TP.nameKey) || null;
@@ -1683,6 +1804,7 @@ body { min-height: 100dvh; }
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
             tpChatInit();
+            tpRegisterAccount().then(function () { tpLoadCredits(); });
           }).catch(function (err) {
             tpDebug('Falha ao salvar: ' + (err && err.message ? err.message : err));
           });
@@ -1808,6 +1930,7 @@ body { min-height: 100dvh; }
     $('support-msg').value = '';
     $('support-error').textContent = '';
   });
+  $('btn-buy-home').addEventListener('click', openPayModal);
   $('support-close').addEventListener('click', function () { $('support-modal').classList.remove('visible'); });
   $('support-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
   $('support-send').addEventListener('click', function () {
@@ -1829,6 +1952,79 @@ body { min-height: 100dvh; }
       $('support-error').textContent = 'Falha ao enviar. Tente de novo.';
     }).finally(function () { $('support-send').disabled = false; });
   });
+
+  /* ---------- Payment ---------- */
+  var payPolling = null;
+  function openPayModal() {
+    $('pay-pix').style.display = 'none';
+    $('pay-products').style.display = '';
+    $('pay-modal').classList.add('visible');
+    loadPayProducts();
+  }
+  function closePayModal() {
+    $('pay-modal').classList.remove('visible');
+    if (payPolling) { clearInterval(payPolling); payPolling = null; }
+  }
+  function loadPayProducts() {
+    var el = $('pay-products'); el.innerHTML = '<p class="desc">Carregando planos...</p>';
+    tpFetchProducts().then(function (products) {
+      if (!products.length) { el.innerHTML = '<p class="desc">Nenhum plano disponível.</p>'; return; }
+      el.innerHTML = '';
+      products.forEach(function (p) {
+        var card = document.createElement('div');
+        card.className = 'pay-card';
+        card.innerHTML = '<div class="pc-info"><h4>' + esc(p.name) + '</h4><p>' + esc(p.description) + '</p></div><div class="pc-price">R$ ' + p.price_brl.toFixed(2).replace('.', ',') + '</div>';
+        card.onclick = function () { startPayment(p); };
+        el.appendChild(card);
+      });
+    }).catch(function () { el.innerHTML = '<p class="desc">Erro ao carregar planos.</p>'; });
+  }
+  function startPayment(product) {
+    $('pay-products').style.display = 'none';
+    $('pay-pix').style.display = '';
+    $('pay-qr').innerHTML = '<p class="desc">Gerando QR Code...</p>';
+    $('pay-pix-input').value = '';
+    $('pay-amount').textContent = 'R$ ' + product.price_brl.toFixed(2).replace('.', ',');
+    $('pay-status').textContent = 'Aguardando pagamento...';
+    $('pay-status').className = 'pay-status';
+    tpCreatePayment(product.id).then(function (res) {
+      if (!res.ok) { $('pay-qr').innerHTML = '<p class="desc" style="color:#f87171">' + esc(res.error || 'Erro ao gerar pagamento') + '</p>'; return; }
+      if (res.qr_code_base64) { $('pay-qr').innerHTML = '<img src="data:image/png;base64,' + res.qr_code_base64 + '" alt="QR Code Pix">'; }
+      $('pay-pix-input').value = res.qr_code || '';
+      $('pay-pix-copy').onclick = function () { navigator.clipboard.writeText(res.qr_code || '').then(function () { toast('Código copiado!'); }); };
+      pollPayment(res.payment_id, product);
+    }).catch(function () { $('pay-qr').innerHTML = '<p class="desc" style="color:#f87171">Erro ao conectar com o servidor.</p>'; });
+  }
+  function pollPayment(paymentId, product) {
+    if (payPolling) clearInterval(payPolling);
+    payPolling = setInterval(function () {
+      tpCheckPayment(paymentId).then(function (res) {
+        if (!res.ok) return;
+        var st = res.payment && res.payment.status;
+        if (st === 'approved') {
+          clearInterval(payPolling); payPolling = null;
+          $('pay-status').textContent = 'Pagamento aprovado!';
+          $('pay-status').className = 'pay-status approved';
+          tpLoadCredits();
+          toast('Créditos adicionados!');
+          setTimeout(closePayModal, 2000);
+        } else if (st === 'cancelled' || st === 'refused') {
+          clearInterval(payPolling); payPolling = null;
+          $('pay-status').textContent = 'Pagamento não confirmado.';
+          $('pay-status').className = 'pay-status';
+        }
+      }).catch(function () {});
+    }, 5000);
+  }
+  $('pay-close').addEventListener('click', closePayModal);
+  $('pay-modal').addEventListener('click', function (e) { if (e.target === this) closePayModal(); });
+
+  function tpShowPayGate() {
+    $('pay-pix').style.display = 'none';
+    $('pay-products').style.display = '';
+    $('pay-modal').classList.add('visible');
+    loadPayProducts();
+  }
 
   /* ---------- Reader ---------- */
   function updateScriptNav() {
@@ -2724,6 +2920,7 @@ $('speed-range').addEventListener('input', function () {
 
   function onRecordingStopped() {
     tpRecord('sessions', { action: 'record', res: state.res, fps: state.fps, duration: Math.max(0, state.timerSec || 0) });
+    tpConsumeCredit().catch(function () {});
     if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
     if (state.scrolling) setScrollState(state.scrollY, false);
     var type = (state.recorder && state.recorder.mimeType) || (state.fileExt === 'mp4' ? 'video/mp4' : 'video/webm');
@@ -2812,6 +3009,7 @@ $('speed-range').addEventListener('input', function () {
   $('btn-record').addEventListener('click', function () {
     if (state.recording) { stopRecording(); return; }
     if (countdownInt) { cancelCountdown(); return; }
+    if (!tpHasCredits()) { tpShowPayGate(); toast('Você sem créditos. Compre para continuar.'); return; }
     if (state.countdown > 0 && state.stream) startCountdown();
     else startRecording();
   });
