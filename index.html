@@ -1716,14 +1716,36 @@ body { min-height: 100dvh; }
 
   function tpBackendAuth(path, method, body) {
     if (!TP.client) return Promise.reject(new Error('Sem Supabase'));
-    return TP.client.auth.getSession().then(function (res) {
-      var session = res.data && res.data.session;
-      if (session && session.access_token) TP.token = session.access_token;
+    return tpWaitLogin().then(function () {
+      if (!TP.token && TP.client && TP.client.auth) {
+        return TP.client.auth.getSession().then(function (res) {
+          var session = res.data && res.data.session;
+          if (session && session.access_token) TP.token = session.access_token;
+          return doFetch();
+        });
+      }
+      return doFetch();
+    });
+    function doFetch() {
       var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
       if (TP.token) opts.headers['Authorization'] = 'Bearer ' + TP.token;
       if (body) opts.body = JSON.stringify(body);
       return fetch(TP.backendUrl + path, opts).then(function (r) { return r.json(); });
+    }
+  }
+
+  var tpLoginReady = null;
+  function tpWaitLogin() {
+    if (TP.token) return Promise.resolve();
+    if (tpLoginReady) return tpLoginReady;
+    tpLoginReady = new Promise(function (resolve) {
+      var tries = 0;
+      var check = setInterval(function () {
+        tries++;
+        if (TP.token || tries > 40) { clearInterval(check); resolve(); }
+      }, 250);
     });
+    return tpLoginReady;
   }
 
   function tpIsOwner() { return TP.uid === TP.ownerId; }
