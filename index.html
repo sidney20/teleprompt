@@ -1536,7 +1536,7 @@ body { min-height: 100dvh; }
   $('inst-close').addEventListener('click', function () { $('inst-modal').classList.remove('visible'); });
   $('inst-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
 
-  /* ---------- Telemetria & registro de nome (Firebase) ---------- */
+  /* ---------- Telemetria & registro de nome (Supabase) ---------- */
   var TP = {
     nameKey: 'teleprompt_name',
     deviceKey: 'teleprompt_device_id',
@@ -1545,15 +1545,11 @@ body { min-height: 100dvh; }
     deviceId: null,
     db: null,
     ready: false,
-    auth: null,
+    client: null,
     queue: [],
     cfg: {
-      apiKey: "AIzaSyApv4v2RfUl1KZliiFzv1abJbyzdh6yH8s",
-      authDomain: "deshboard-d3f4a.firebaseapp.com",
-      projectId: "deshboard-d3f4a",
-      storageBucket: "deshboard-d3f4a.firebasestorage.app",
-      messagingSenderId: "337476542022",
-      appId: "1:337476542022:web:595640b2f99d5d2fddf447"
+      url: 'https://winbijjsaawvmtmbluix.supabase.co',
+      anonKey: 'sb_publishable_Y8WYTANqEOQ5u2x4WXytGQ_1DQ03PLW'
     }
   };
 
@@ -1608,42 +1604,44 @@ body { min-height: 100dvh; }
   }
 
   function tpLoadFirebase() {
-    if (TP.ready) return Promise.resolve(TP.db);
+    if (TP.ready) return Promise.resolve(TP.client);
     if (TP.loading) return TP.loading;
     TP.loading = new Promise(function (resolve) {
-      var need = ['https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
-                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
-                  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'];
-      var rem = need.length;
-      function done() { rem--; if (rem === 0) {
+      if (window.supabase && window.supabase.createClient) {
         try {
-          firebase.initializeApp(TP.cfg);
-          TP.auth = firebase.auth();
-          TP.db = firebase.firestore();
+          TP.client = window.supabase.createClient(TP.cfg.url, TP.cfg.anonKey);
+          TP.db = TP.client;
           TP.ready = true;
-        } catch (e) {}
-        resolve(TP.db);
-      }}
-      need.forEach(function (url) {
-        var s = document.createElement('script');
-        s.src = url;
-        s.onload = done;
-        s.onerror = done;
-        document.head.appendChild(s);
-      });
+        } catch (e) { tpDebug('Erro Supabase init: ' + e.message); }
+        resolve(TP.client);
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.onload = function () {
+        try {
+          TP.client = window.supabase.createClient(TP.cfg.url, TP.cfg.anonKey);
+          TP.db = TP.client;
+          TP.ready = true;
+        } catch (e) { tpDebug('Erro Supabase init: ' + e.message); }
+        resolve(TP.client);
+      };
+      s.onerror = function () { resolve(null); };
+      document.head.appendChild(s);
     });
     return TP.loading;
   }
 
   function tpRecord(collection, data, keep) {
     if (!TP.db) { TP.queue.push({ c: collection, d: data }); while (TP.queue.length > 40) TP.queue.shift(); return; }
-    var payload = Object.assign({ ts: Date.now() }, data);
-    if (TP.uid) payload.userId = TP.uid;
-    if (TP.name) payload.userName = TP.name;
+    var payload = Object.assign({}, data);
+    if (TP.uid) payload.user_id = TP.uid;
+    if (TP.name) payload.user_name = TP.name;
     if (TP.deviceId) payload.device_id = TP.deviceId;
+    if (collection === 'messages') payload.from_role = data.from || 'user';
     try {
-      var rec = TP.db.collection(collection).add(payload);
-      if (!keep) rec.catch(function () {});
+      var rec = TP.db.from(collection).insert(payload);
+      if (!keep) rec.then(function () {}).catch(function () {});
     } catch (e) {}
   }
 
@@ -1661,30 +1659,35 @@ body { min-height: 100dvh; }
   function tpStartHeartbeat() {
     setInterval(function () {
       if (!TP.db || !TP.uid) return;
-      try { TP.db.collection('users').doc(TP.uid).update({ lastSeen: Date.now() }).catch(function () {}); } catch (e) {}
+      try { TP.db.from('users').update({ last_seen: new Date().toISOString() }).eq('id', TP.uid).then(function () {}).catch(function () {}); } catch (e) {}
     }, 60000);
   }
 
   function tpLogin() {
     if (!TP.name) return;
     tpLoadFirebase().then(function () {
-      if (!TP.ready) { tpDebug('Falha ao carregar Firebase SDK'); return; }
+      if (!TP.ready) { tpDebug('Falha ao carregar Supabase SDK'); return; }
       try {
-        return TP.auth.signInAnonymously().then(function (res) {
-          TP.uid = res.user.uid;
-          var now = Date.now();
-          var me = TP.db.collection('users').doc(TP.uid);
-          var data = Object.assign({ name: TP.name, admin: false, firstSeen: now, lastSeen: now, device_id: TP.deviceId || null }, tpMeta());
-          return me.set(data, { merge: true }).then(function () {
+        TP.client.auth.signInAnonymously().then(function (res) {
+          TP.uid = res.user.id;
+          var meta = tpMeta();
+          TP.db.from('users').upsert({
+            id: TP.uid,
+            name: TP.name,
+            admin: false,
+            device_id: TP.deviceId || '',
+            ua: meta.ua,
+            screen: meta.screen,
+            ram: meta.ram
+          }, { onConflict: 'id' }).then(function () {
             TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
             TP.queue = [];
             tpChatInit();
           }).catch(function (err) {
-            tpDebug('Falha ao salvar: ' + (err && err.code ? err.code : err));
-            return me.update({ name: TP.name, lastSeen: now }).catch(function () {});
+            tpDebug('Falha ao salvar: ' + (err && err.message ? err.message : err));
           });
         }).catch(function (err) {
-          tpDebug('Falha no login: ' + (err && err.code ? err.code : err));
+          tpDebug('Falha no login: ' + (err && err.message ? err.message : err));
         });
       } catch (e) { tpDebug('Erro: ' + e.message); }
     }).catch(function (e) { tpDebug('Erro SDK: ' + (e && e.message)); });
@@ -1720,23 +1723,39 @@ body { min-height: 100dvh; }
   window.addEventListener('unhandledrejection', function (e) { tpLog('promise', e.reason && e.reason.message ? e.reason.message : 'unhandled rejection'); });
 
   /* ---------- Chat suporte (mensagens com o dono) ---------- */
-  var TPC = { unsub: null, lastRead: 0 };
+  var TPC = { sub: null, lastRead: 0, msgs: [] };
   function tpChatInit() {
     var chatBtn = $('btn-chat-ctrl');
     if (!chatBtn || !TP.db || !TP.uid) return;
-    TPC.unsub = TP.db.collection('messages')
-      .where('userId', '==', TP.uid)
-      .orderBy('ts', 'desc')
-      .limit(200)
-      .onSnapshot(function (snap) {
-        TPC.msgs = [];
-        snap.forEach(function (d) { var m = d.data(); m.id = d.id; TPC.msgs.push(m); });
-        TPC.msgs.reverse();
-        var unread = TPC.msgs.filter(function (m) { return m.from === 'admin' && !m.read; }).length;
+    // Load initial messages
+    TP.db.from('messages').select('*').eq('user_id', TP.uid).order('ts', { ascending: false }).limit(200)
+      .then(function (res) {
+        TPC.msgs = (res.data || []).reverse();
+        var unread = TPC.msgs.filter(function (m) { return m.from_role === 'admin' && !m.read; }).length;
         var badge = $('chat-badge');
         if (badge) { badge.textContent = unread > 9 ? '9+' : unread; badge.classList.toggle('hidden', unread === 0); }
         tpChatRender();
-      }, function () {});
+      });
+    // Subscribe to real-time changes
+    if (TPC.sub) TPC.sub.unsubscribe();
+    TPC.sub = TP.db.channel('messages-' + TP.uid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: 'user_id=eq.' + TP.uid }, function (payload) {
+        if (payload.eventType === 'INSERT') {
+          TPC.msgs.push(payload.new);
+          var unread = TPC.msgs.filter(function (m) { return m.from_role === 'admin' && !m.read; }).length;
+          var badge = $('chat-badge');
+          if (badge) { badge.textContent = unread > 9 ? '9+' : unread; badge.classList.toggle('hidden', unread === 0); }
+          tpChatRender();
+        } else if (payload.eventType === 'UPDATE') {
+          var idx = TPC.msgs.findIndex(function (m) { return m.id === payload.new.id; });
+          if (idx >= 0) TPC.msgs[idx] = payload.new;
+          var unread = TPC.msgs.filter(function (m) { return m.from_role === 'admin' && !m.read; }).length;
+          var badge = $('chat-badge');
+          if (badge) { badge.textContent = unread > 9 ? '9+' : unread; badge.classList.toggle('hidden', unread === 0); }
+          tpChatRender();
+        }
+      })
+      .subscribe();
   }
   function tpChatRender() {
     var box = $('chat-msgs');
@@ -1750,8 +1769,8 @@ body { min-height: 100dvh; }
       var d = new Date(m.ts);
       var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
       var div = document.createElement('div');
-      div.className = 'chat-bubble ' + (m.from === 'admin' ? 'you' : 'me');
-      div.innerHTML = '<span class="cb-name">' + (m.from === 'admin' ? 'Dono' : escUsername(TP.name)) + '</span>' + escChat(m.message) + '<span class="cb-time">' + hm + '</span>';
+      div.className = 'chat-bubble ' + (m.from_role === 'admin' ? 'you' : 'me');
+      div.innerHTML = '<span class="cb-name">' + (m.from_role === 'admin' ? 'Dono' : escUsername(TP.name)) + '</span>' + escChat(m.message) + '<span class="cb-time">' + hm + '</span>';
       box.appendChild(div);
     });
     box.scrollTop = box.scrollHeight;
@@ -1766,8 +1785,8 @@ body { min-height: 100dvh; }
     tpChatRender();
     if (TP.db && TP.uid && TPC.msgs) {
       TPC.msgs.forEach(function (m) {
-        if (m.from === 'admin' && !m.read) {
-          TP.db.collection('messages').doc(m.id).update({ read: true }).catch(function () {});
+        if (m.from_role === 'admin' && !m.read) {
+          TP.db.from('messages').update({ read: true }).eq('id', m.id).then(function () {}).catch(function () {});
         }
       });
     }
@@ -1777,7 +1796,7 @@ body { min-height: 100dvh; }
     var text = (input.value || '').trim();
     if (!text || !TP.db || !TP.uid) return;
     input.value = '';
-    TP.db.collection('messages').add({ userId: TP.uid, userName: TP.name || '', from: 'user', message: text.slice(0, 500), read: true, ts: Date.now() }).catch(function () {});
+    TP.db.from('messages').insert({ user_id: TP.uid, user_name: TP.name || '', from_role: 'user', message: text.slice(0, 500), read: true }).then(function () {}).catch(function () {});
   }
   $('chat-send').addEventListener('click', tpSendMsg);
   $('chat-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') tpSendMsg(); });
@@ -1798,12 +1817,11 @@ body { min-height: 100dvh; }
     if (!TP.db || !TP.uid || !TP.ready) { $('support-error').textContent = 'Sem conexão com o servidor ainda. Tente de novo em instantes.';
       return; }
     $('support-send').disabled = true;
-    TP.db.collection('support_messages').add({
-      userId: TP.uid,
-      userName: TP.name || '',
+    TP.db.from('support_messages').insert({
+      user_id: TP.uid,
+      user_name: TP.name || '',
       message: msg.slice(0, 2000),
-      status: 'new',
-      ts: Date.now()
+      status: 'new'
     }).then(function () {
       $('support-modal').classList.remove('visible');
       toast('Suporte enviado!');
