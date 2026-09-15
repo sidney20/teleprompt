@@ -1709,9 +1709,21 @@ body { min-height: 100dvh; }
   /* ---------- Backend API (credits, payments) ---------- */
   function tpBackend(path, method, body) {
     var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
-    if (TP.uid) opts.headers['Authorization'] = 'Bearer ' + TP.uid;
+    if (TP.token) opts.headers['Authorization'] = 'Bearer ' + TP.token;
     if (body) opts.body = JSON.stringify(body);
     return fetch(TP.backendUrl + path, opts).then(function (r) { return r.json(); });
+  }
+
+  function tpBackendAuth(path, method, body) {
+    if (!TP.client) return Promise.reject(new Error('Sem Supabase'));
+    return TP.client.auth.getSession().then(function (res) {
+      var session = res.data && res.data.session;
+      if (session && session.access_token) TP.token = session.access_token;
+      var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
+      if (TP.token) opts.headers['Authorization'] = 'Bearer ' + TP.token;
+      if (body) opts.body = JSON.stringify(body);
+      return fetch(TP.backendUrl + path, opts).then(function (r) { return r.json(); });
+    });
   }
 
   function tpIsOwner() { return TP.uid === TP.ownerId; }
@@ -1733,7 +1745,7 @@ body { min-height: 100dvh; }
 
   function tpConsumeCredit() {
     if (tpIsOwner()) return Promise.resolve({ ok: true, remaining: 999 });
-    return tpBackend('/api/credits/consume', 'POST', { amount: 1 }).then(function (res) {
+    return tpBackendAuth('/api/credits/consume', 'POST', { amount: 1 }).then(function (res) {
       if (res.ok && TP.credits) { TP.credits.total = res.remaining; tpUpdateCreditDisplay(); }
       return res;
     });
@@ -1741,7 +1753,7 @@ body { min-height: 100dvh; }
 
   function tpLoadCredits() {
     if (tpIsOwner()) { TP.credits = { total: 999, free: 0, paid: 0 }; tpUpdateCreditDisplay(); return; }
-    return tpBackend('/api/me/credits').then(function (res) {
+    return tpBackendAuth('/api/me/credits').then(function (res) {
       if (res.ok) { TP.credits = res.credits; TP.plan = res.plan || null; }
       tpUpdateCreditDisplay();
     }).catch(function () { TP.credits = { total: 0, free: 0, paid: 0 }; tpUpdateCreditDisplay(); });
@@ -1752,17 +1764,17 @@ body { min-height: 100dvh; }
   }
 
   function tpCreatePayment(productId) {
-    return tpBackend('/api/payments/create', 'POST', { product_id: productId });
+    return tpBackendAuth('/api/payments/create', 'POST', { product_id: productId });
   }
 
   function tpCheckPayment(paymentId) {
-    return tpBackend('/api/payments/' + paymentId);
+    return tpBackendAuth('/api/payments/' + paymentId);
   }
 
   function tpRegisterAccount() {
     if (!TP.uid) return Promise.resolve();
     var meta = tpMeta();
-    return tpBackend('/api/auth/create', 'POST', {
+    return tpBackendAuth('/api/auth/create', 'POST', {
       uid: TP.uid, name: TP.name, device_id: TP.deviceId,
       ua: meta.ua, screen: meta.screen, ram: meta.ram
     }).then(function (res) {
@@ -1791,6 +1803,7 @@ body { min-height: 100dvh; }
       try {
         TP.client.auth.signInAnonymously().then(function (res) {
           TP.uid = res.user.id;
+          TP.token = res.session ? res.session.access_token : null;
           var meta = tpMeta();
           TP.db.from('users').upsert({
             id: TP.uid,
