@@ -1860,6 +1860,30 @@ body { min-height: 100dvh; }
     }).catch(function () {});
   }
 
+  function checkGoogleSession() {
+    if (!TP.client || !TP.client.auth) return;
+    TP.client.auth.getSession().then(function (res) {
+      var s = res.data && res.data.session;
+      if (s && s.user) {
+        TP.uid = s.user.id;
+        TP.token = s.access_token;
+        TP.name = s.user.user_metadata && s.user.user_metadata.full_name || s.user.email || 'Usuário';
+        try { localStorage.setItem(TP.nameKey, TP.name); } catch (e) {}
+        tpDebug('Google login OK: ' + TP.name + ' uid=' + TP.uid);
+        var meta = tpMeta();
+        if (TP.db) {
+          TP.db.from('users').upsert({
+            id: TP.uid, name: TP.name, admin: false,
+            device_id: TP.deviceId || '', ua: meta.ua,
+            screen: meta.screen, ram: meta.ram
+          }, { onConflict: 'id' }).then(function () {
+            tpRegisterAccount().then(function () { tpLoadCredits(); });
+          }).catch(function () { tpRegisterAccount().then(function () { tpLoadCredits(); }); });
+        }
+      }
+    }).catch(function () {});
+  }
+
   function tpAutoInit() {
     tpEnsureDeviceId();
     TP.name = localStorage.getItem(TP.nameKey) || null;
@@ -1982,7 +2006,17 @@ body { min-height: 100dvh; }
           if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
           TP.client.auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: window.location.origin + window.location.pathname }
+            options: {
+              redirectTo: window.location.origin + window.location.pathname,
+              skipBrowserRedirect: true
+            }
+          }).then(function (res) {
+            if (res && res.url) {
+              var w = window.open(res.url, '_blank', 'width=500,height=700');
+              var poll = setInterval(function () {
+                try { if (!w || w.closed) { clearInterval(poll); checkGoogleSession(); } } catch (e) {}
+              }, 1000);
+            }
           }).catch(function (e) { toast('Erro ao conectar com Google: ' + e.message); });
         });
       };
@@ -2088,7 +2122,17 @@ body { min-height: 100dvh; }
         if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
         TP.client.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: window.location.origin + window.location.pathname }
+          options: {
+            redirectTo: window.location.origin + window.location.pathname,
+            skipBrowserRedirect: true
+          }
+        }).then(function (res) {
+          if (res && res.url) {
+            var w = window.open(res.url, '_blank', 'width=500,height=700');
+            var poll = setInterval(function () {
+              try { if (!w || w.closed) { clearInterval(poll); checkGoogleSession(); } } catch (e) {}
+            }, 1000);
+          }
         }).catch(function (e) { toast('Erro ao conectar com Google: ' + e.message); });
       });
     });
