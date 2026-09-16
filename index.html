@@ -1823,39 +1823,55 @@ body { min-height: 100dvh; }
     tpLoadFirebase().then(function () {
       if (!TP.ready) { tpDebug('Falha ao carregar Supabase SDK'); return; }
       try {
-        TP.client.auth.signInAnonymously().then(function (res) {
-          var user = res.data && res.data.user ? res.data.user : res.user;
-          var session = res.data && res.data.session ? res.data.session : res.session;
-          TP.uid = user ? user.id : null;
-          TP.token = session ? session.access_token : null;
-          tpDebug('Login OK uid=' + TP.uid + ' token=' + (TP.token ? 'sim' : 'NAO'));
-          var meta = tpMeta();
-          TP.db.from('users').upsert({
-            id: TP.uid,
-            name: TP.name,
-            admin: false,
-            device_id: TP.deviceId || '',
-            ua: meta.ua,
-            screen: meta.screen,
-            ram: meta.ram
-          }, { onConflict: 'id' }).then(function () {
-            TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
-            TP.queue = [];
-            tpChatInit();
-            if (!TP.token && TP.client && TP.client.auth) {
-              TP.client.auth.getSession().then(function (sRes) {
-                var s = sRes.data && sRes.data.session ? sRes.data.session : (sRes.session || null);
-                if (s && s.access_token) { TP.token = s.access_token; tpDebug('Token obtido via getSession'); }
-                tpRegisterAccount().then(function () { tpLoadCredits(); });
-              });
-            } else {
+        TP.client.auth.getSession().then(function (sessionRes) {
+          var existingSession = sessionRes.data && sessionRes.data.session;
+          if (existingSession && existingSession.user && existingSession.access_token) {
+            TP.uid = existingSession.user.id;
+            TP.token = existingSession.access_token;
+            tpDebug('Sessão restaurada uid=' + TP.uid + ' token=sim');
+            var meta = tpMeta();
+            TP.db.from('users').upsert({
+              id: TP.uid, name: TP.name, admin: false,
+              device_id: TP.deviceId || '', ua: meta.ua,
+              screen: meta.screen, ram: meta.ram
+            }, { onConflict: 'id' }).then(function () {
+              TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
+              TP.queue = [];
+              tpChatInit();
               tpRegisterAccount().then(function () { tpLoadCredits(); });
-            }
+            }).catch(function () { tpRegisterAccount().then(function () { tpLoadCredits(); }); });
+            return;
+          }
+          TP.client.auth.signInAnonymously().then(function (res) {
+            var user = res.data && res.data.user ? res.data.user : res.user;
+            var session = res.data && res.data.session ? res.data.session : res.session;
+            TP.uid = user ? user.id : null;
+            TP.token = session ? session.access_token : null;
+            tpDebug('Login OK uid=' + TP.uid + ' token=' + (TP.token ? 'sim' : 'NAO'));
+            var meta = tpMeta();
+            TP.db.from('users').upsert({
+              id: TP.uid, name: TP.name, admin: false,
+              device_id: TP.deviceId || '', ua: meta.ua,
+              screen: meta.screen, ram: meta.ram
+            }, { onConflict: 'id' }).then(function () {
+              TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
+              TP.queue = [];
+              tpChatInit();
+              if (!TP.token && TP.client && TP.client.auth) {
+                TP.client.auth.getSession().then(function (sRes) {
+                  var s = sRes.data && sRes.data.session ? sRes.data.session : (sRes.session || null);
+                  if (s && s.access_token) { TP.token = s.access_token; tpDebug('Token obtido via getSession'); }
+                  tpRegisterAccount().then(function () { tpLoadCredits(); });
+                });
+              } else {
+                tpRegisterAccount().then(function () { tpLoadCredits(); });
+              }
+            }).catch(function (err) {
+              tpDebug('Falha ao salvar: ' + (err && err.message ? err.message : err));
+            });
           }).catch(function (err) {
-            tpDebug('Falha ao salvar: ' + (err && err.message ? err.message : err));
+            tpDebug('Falha no login: ' + (err && err.message ? err.message : JSON.stringify(err)));
           });
-        }).catch(function (err) {
-          tpDebug('Falha no login: ' + (err && err.message ? err.message : JSON.stringify(err)));
         });
       } catch (e) { tpDebug('Erro: ' + e.message); }
     }).catch(function (e) { tpDebug('Erro SDK: ' + (e && e.message)); });
