@@ -221,6 +221,7 @@ body { min-height: 100dvh; overflow: hidden; }
   -webkit-user-select: none;
 }
 #scroll-content div { line-height: 1.7; }
+  #scroll-content div.strike { text-decoration: line-through; opacity: .45; }
 .read-fade {
   position: absolute; left: 0; right: 0; bottom: 0;
   height: 46px;
@@ -2416,7 +2417,7 @@ body { min-height: 100dvh; overflow: hidden; }
     state.wrapW = wrapW;
     state.lineHeight = fontPx * 1.7;
     scrollContent.style.fontSize = fontPx + 'px';
-    scrollContent.innerHTML = lines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('');
+    scrollContent.innerHTML = lines.map(function (l) { var cls = /^card a partir daqui/i.test(l) ? ' class="strike"' : ''; return '<div' + cls + '>' + esc(l) + '</div>'; }).join('');
     recomputeMax();
   }
 
