@@ -122,8 +122,10 @@ body { min-height: 100dvh; overflow: hidden; }
 .confirm-body b { color: #f87171; }
 
 /* ---------- SCRIPTS ---------- */
-#screen-scripts { background: radial-gradient(120% 60% at 50% 0%, #1f1b3d 0%, #0f0c29 60%); padding: calc(20px + env(safe-area-inset-top)) 14px 40px; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-#screen-scripts::-webkit-scrollbar { display: none; }
+#screen-scripts { background: radial-gradient(120% 60% at 50% 0%, #1f1b3d 0%, #0f0c29 60%); padding: calc(20px + env(safe-area-inset-top)) 14px 40px; }
+  #screen-scripts::-webkit-scrollbar { display: none; }
+  #scripts-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  #scripts-list::-webkit-scrollbar { display: none; }
 
 .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .icon-btn {
