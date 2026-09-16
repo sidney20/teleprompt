@@ -2,6 +2,7 @@
   var NUM_RE = /^\s*(\d{1,3})\s*([.\-\u2013\u2014)])\s*(.+)$/;
   var SEP_RE = /^[\s_\-\u2014\u2013]{4,}$/;
   var NOTE_RE = /^[\u00bb\u00ab<>].{4,}/;
+  var STEP_RE = /^\d+\.\s+[a-záàãâéêíóôõúç]/i;
 
   function parseScripts(text) {
     var normalized = String(text).replace(/\r\n/g, '\n');
@@ -18,6 +19,7 @@
         continue;
       }
       if (SEP_RE.test(line)) continue;
+      if (STEP_RE.test(line)) continue;
       if (NOTE_RE.test(line)) {
         pendingNote = pendingNote ? pendingNote + '\n' + line : line;
         continue;
