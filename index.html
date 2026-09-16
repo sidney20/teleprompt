@@ -700,6 +700,9 @@ body { min-height: 100dvh; }
 .mbtn:active { transform: scale(.98); }
 .mbtn.green { background: linear-gradient(135deg,#10b981,#059669); }
 .mbtn.ghost { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
+.mbtn.rerecord { background: linear-gradient(135deg, #4f46e5, #6366f1); font-size: .88rem; padding: 14px 20px; }
+.mbtn.next { background: linear-gradient(135deg, #10b981, #059669); font-size: .88rem; padding: 14px 20px; box-shadow: 0 0 20px rgba(16,185,129,.3); }
+.mbtn.next:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 
 .name-input {
   width: 100%;
@@ -1096,13 +1099,10 @@ body { min-height: 100dvh; }
 <div class="modal-overlay" id="rec-modal">
   <div class="modal">
     <h2>Vídeo finalizado!</h2>
-    <p class="rec-hint">Dica: salve em <b>Videos/DCIM ou Pictures</b> para o Google Fotos fazer backup automático. Se salvar em Download, ative "Pastas do dispositivo &rarr; Download" nas configurações do Fotos.</p>
     <video id="rec-preview" controls playsinline></video>
     <div class="mbtns">
-      <button class="mbtn" id="btn-download">&#11015; Baixar vídeo</button>
-      <button class="mbtn green" id="btn-rerecord">Gravar novamente</button>
-      <button class="mbtn" id="btn-next">Gravar próximo roteiro</button>
-      <button class="mbtn ghost" id="btn-rec-close">Voltar aos roteiros</button>
+      <button class="mbtn rerecord" id="btn-rerecord">&#128260; Gravar novamente</button>
+      <button class="mbtn next" id="btn-next">&#9654; Salvar e próximo roteiro</button>
     </div>
   </div>
 </div>
@@ -2982,7 +2982,6 @@ $('speed-range').addEventListener('input', function () {
 
   function onRecordingStopped() {
     tpRecord('sessions', { action: 'record', res: state.res, fps: state.fps, duration: Math.max(0, state.timerSec || 0) });
-    tpConsumeCredit().catch(function () {});
     if (state.canvasStream) { state.canvasStream.getTracks().forEach(function (t) { t.stop(); }); state.canvasStream = null; }
     if (state.scrolling) setScrollState(state.scrollY, false);
     var type = (state.recorder && state.recorder.mimeType) || (state.fileExt === 'mp4' ? 'video/mp4' : 'video/webm');
@@ -3076,40 +3075,8 @@ $('speed-range').addEventListener('input', function () {
     else startRecording();
   });
 
-  $('btn-download').addEventListener('click', function () {
-    if (!state.lastBlobUrl) return;
-    var num = scriptNum(state.doc[state.idx], state.idx);
-    var name = 'roteiro-' + num + '.' + state.fileExt;
-    if (window.showSaveFilePicker) {
-      var accept = {};
-      accept[state.fileExt === 'mp4' ? 'video/mp4' : 'video/webm'] = ['.' + state.fileExt];
-      window.showSaveFilePicker({
-        id: 'tp-videos',
-        suggestedName: name,
-        startIn: 'pictures',
-        types: [{ description: 'Vídeo', accept: accept }]
-      }).then(function (handle) {
-        return handle.createWritable().then(function (w) {
-          return fetch(state.lastBlobUrl).then(function (r) { return r.blob(); }).then(function (blob) {
-            w.write(blob);
-            return w.close();
-          });
-        });
-      }).then(function () {
-        toast('Salvo com sucesso!');
-        if ($('rec-modal').classList.contains('visible')) setTimeout(closeRecModal, 400);
-      }).catch(function (err) {
-        if (err && err.name !== 'AbortError') toast('Não foi possível salvar');
-      });
-      return;
-    }
-    var a = document.createElement('a');
-    a.href = state.lastBlobUrl;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    if ($('rec-modal').classList.contains('visible')) setTimeout(closeRecModal, 400);
+  $('btn-rerecord').addEventListener('click', function () {
+    closeRecModal();
   });
 
   $('btn-script-prev').addEventListener('click', function () {
@@ -3124,19 +3091,63 @@ $('speed-range').addEventListener('input', function () {
     else toast('Esse é o último roteiro');
   });
 
-  $('btn-rerecord').addEventListener('click', function () {
-    closeRecModal();
-  });
+  var processingNext = false;
+  function autoSaveVideo(blob) {
+    var ext = state.fileExt || 'webm';
+    var num = scriptNum(state.doc[state.idx], state.idx);
+    var name = 'roteiro-' + num + '.' + ext;
+    var mimeType = ext === 'mp4' ? 'video/mp4' : 'video/webm';
+
+    if (window.showSaveFilePicker) {
+      var accept = {};
+      accept[mimeType] = ['.' + ext];
+      return window.showSaveFilePicker({
+        id: 'tp-videos',
+        suggestedName: name,
+        startIn: 'pictures',
+        types: [{ description: 'Vídeo', accept: accept }]
+      }).then(function (handle) {
+        return handle.createWritable().then(function (w) {
+          return w.write(blob).then(function () { return w.close(); });
+        });
+      });
+    }
+
+    return new Promise(function (resolve, reject) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); resolve(); }, 1500);
+    });
+  }
 
   $('btn-next').addEventListener('click', function () {
-    closeRecModal();
-    if (state.idx < state.doc.length - 1) openReader(state.idx + 1);
-    else toast('Esse é o último roteiro');
-  });
+    if (processingNext) return;
+    if (!state.lastBlobUrl) { toast('Nenhum vídeo gravado'); return; }
+    processingNext = true;
+    var btn = $('btn-next');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
 
-  $('btn-rec-close').addEventListener('click', function () {
-    closeRecModal();
-    backToScripts();
+    fetch(state.lastBlobUrl).then(function (r) { return r.blob(); }).then(function (blob) {
+      return autoSaveVideo(blob);
+    }).then(function () {
+      toast('Vídeo salvo na galeria!');
+      return tpConsumeCredit();
+    }).then(function () {
+      closeRecModal();
+      if (state.idx < state.doc.length - 1) openReader(state.idx + 1);
+      else toast('Esse é o último roteiro');
+    }).catch(function (err) {
+      toast('Erro ao salvar vídeo. Tente novamente.');
+    }).finally(function () {
+      processingNext = false;
+      btn.disabled = false;
+      btn.textContent = '\u25B6 Salvar e próximo roteiro';
+    });
   });
 
   $('rec-modal').addEventListener('click', function (e) {
