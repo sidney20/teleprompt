@@ -726,23 +726,15 @@ body { min-height: 100dvh; }
 .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 40%; height: 1px; background: rgba(255,255,255,.12); }
 .divider::before { left: 0; }
 .divider::after { right: 0; }
-.btn-google-sm {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid rgba(255,255,255,.15);
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: .72rem;
-  font-weight: 600;
-  color: #d1d5db;
-  cursor: pointer;
-  background: rgba(255,255,255,.06);
-  margin-top: 6px;
-  transition: background .2s;
+.login-logo {
+  width: 64px; height: 64px;
+  margin: 0 auto 12px;
+  border-radius: 18px;
+  background: linear-gradient(135deg,#8b5cf6,#6366f1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; color: #fff;
+  box-shadow: 0 8px 24px rgba(139,92,246,.35);
 }
-.btn-google-sm:hover { background: rgba(255,255,255,.12); }
-.btn-google-sm svg { width: 14px; height: 14px; }
 
 .name-input {
   width: 100%;
@@ -800,6 +792,7 @@ body { min-height: 100dvh; }
 .cr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
 .cr-dot.on { background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,.5); }
 .cr-dot.off { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.5); }
+.cr-user { font-weight: 700; color: #e5e7eb; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pay-modal-inner { max-width: 400px; }
 .pay-products { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
@@ -890,10 +883,7 @@ body { min-height: 100dvh; }
       </div>
       <div id="status" class="status"></div>
       <div id="credit-display" class="credits-bar loading">Carregando...</div>
-      <button class="btn-google-sm" id="btn-google-upgrade" style="display:none" title="Entrar com Google para acesso ilimitado">
-        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-        Google
-      </button>
+    </div>
     </div>
 
     <div class="home-actions">
@@ -1163,21 +1153,30 @@ body { min-height: 100dvh; }
   </div>
 </div>
 
-<!-- ============ MODAL NOME ============ -->
-<div class="modal-overlay" id="name-modal">
+<!-- ============ MODAL LOGIN (GOOGLE) ============ -->
+<div class="modal-overlay" id="login-modal">
   <div class="modal">
-    <h2>Qual é o seu nome?</h2>
-    <p class="desc">Preencha uma única vez. O dono do app usa seu nome para saber quem está usando o teleprompt.</p>
-    <input class="name-input" id="name-input" type="text" maxlength="40" placeholder="Digite seu nome" autocomplete="name">
-    <div class="name-error" id="name-error"></div>
-    <div class="mbtns">
-      <button class="mbtn" id="name-submit">Continuar</button>
-    </div>
-    <div class="divider">ou</div>
-    <button class="btn-google" id="btn-google-login">
+    <div class="login-logo">&#127912;</div>
+    <h2>Bem-vindo ao TelePrompT</h2>
+    <p class="desc">Entre com sua conta Google para começar. Sem cadastro com senha.</p>
+    <button class="btn-google" id="btn-login-google">
       <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
       Entrar com Google
     </button>
+  </div>
+</div>
+
+<!-- ============ MODAL USERNAME ÚNICO ============ -->
+<div class="modal-overlay" id="username-modal">
+  <div class="modal">
+    <h2>Escolha seu username</h2>
+    <p class="desc">Este nome aparece para o dono do app. Não pode repetir entre usuários.</p>
+    <input class="name-input" id="username-input" type="text" maxlength="20" placeholder="ex: maria_2024" autocomplete="off" spellcheck="false">
+    <div class="name-error" id="username-error"></div>
+    <div class="mbtns">
+      <button class="mbtn" id="username-submit">Continuar</button>
+    </div>
+    <p class="desc" style="font-size:.72rem;color:#6b7280;margin-top:4px;">3 a 20 caracteres: letras, números e underscore (_)</p>
   </div>
 </div>
 
@@ -1644,8 +1643,10 @@ body { min-height: 100dvh; }
     deviceKey: 'teleprompt_device_id',
     backendUrl: 'https://teleprompt-backend.onrender.com',
     ownerId: '2c0e91e0-ba88-46da-959b-d047ff7a96a0',
+    ownerEmail: 'sidneymarquesss20@gmail.com',
     name: null,
     uid: null,
+    email: null,
     deviceId: null,
     db: null,
     ready: false,
@@ -1675,16 +1676,11 @@ body { min-height: 100dvh; }
   }
 
   var TP_BLOCKED_NAMES = ['a','b','c','ok','sim','nao','no','hi','hey','test','teste','teste1','teste2','user','usuario','admin','root','teste123','123','1234','12345','abc','aaa','bbb','qqq','xxx','aaa1','ddd','fff'];
-  function tpValidateName(raw) {
-    var v = (raw || '').trim();
-    if (v.length < 3) return 'Nome precisa de pelo menos 3 letras.';
-    if (/^\d+$/.test(v)) return 'Nome não pode ser só números.';
-    if (TP_BLOCKED_NAMES.indexOf(v.toLowerCase()) >= 0) return 'Escolha um nome mais específico.';
+  function tpValidateUsername(raw) {
+    var v = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (v.length < 3 || v.length > 20) return 'Use 3-20 caracteres: letras, números ou _.';
+    if (TP_BLOCKED_NAMES.indexOf(v) >= 0) return 'Escolha um username mais específico.';
     return null;
-  }
-  function tpNormalizeName(raw) {
-    var v = (raw || '').trim().replace(/\s+/g, ' ');
-    return v.charAt(0).toUpperCase() + v.slice(1);
   }
   function tpDebug(msg) {
     try {
@@ -1797,7 +1793,12 @@ body { min-height: 100dvh; }
     return tpLoginReady;
   }
 
-  function tpIsOwner() { return TP.uid === TP.ownerId; }
+  function tpIsOwner() {
+    if (!TP) return false;
+    if (TP.uid === TP.ownerId) return true;
+    if (TP.email && TP.email.toLowerCase() === TP.ownerEmail) return true;
+    return false;
+  }
 
   function tpHasCredits() {
     if (tpIsOwner()) return true;
@@ -1806,19 +1807,18 @@ body { min-height: 100dvh; }
 
   function tpUpdateCreditDisplay() {
     var el = $('credit-display');
-    var gBtn = $('btn-google-upgrade');
     if (!el) return;
     if (tpIsOwner()) {
       el.innerHTML = '<span class="cr-dot on"></span>Acesso ilimitado';
       el.className = 'credits-bar owner';
-      if (gBtn) gBtn.style.display = 'none';
       return;
     }
     if (TP.credits === null) { el.innerHTML = 'Carregando...'; el.className = 'credits-bar loading'; return; }
     var n = TP.credits.total || 0;
-    el.innerHTML = '<span class="cr-dot ' + (n > 0 ? 'on' : 'off') + '"></span>' + n + ' roteiro(s) disponível(is)';
+    var who = TP.username || TP.name || '';
+    var whoHtml = who ? '<span class="cr-user">' + esc(who) + '</span>' : '';
+    el.innerHTML = whoHtml + '<span class="cr-dot ' + (n > 0 ? 'on' : 'off') + '"></span>' + n + ' roteiro(s) disponível(is)';
     el.className = 'credits-bar' + (n > 0 ? '' : ' empty');
-    if (gBtn) gBtn.style.display = 'inline-flex';
   }
 
   function tpConsumeCredit() {
@@ -1853,62 +1853,125 @@ body { min-height: 100dvh; }
     if (!TP.uid) return Promise.resolve();
     var meta = tpMeta();
     return tpBackendAuth('/api/auth/create', 'POST', {
-      uid: TP.uid, name: TP.name, device_id: TP.deviceId,
+      uid: TP.uid, name: TP.name || TP.email || '', email: TP.email || null,
+      device_id: TP.deviceId,
       ua: meta.ua, screen: meta.screen, ram: meta.ram
     }).then(function (res) {
       if (res.ok) { TP.credits = res.credits; tpUpdateCreditDisplay(); }
     }).catch(function () {});
   }
 
+  function beginGoogleAuth() {
+    tpLoadFirebase().then(function () {
+      if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
+      TP.client.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + window.location.pathname,
+          skipBrowserRedirect: true
+        }
+      }).then(function (res) {
+        if (res && res.url) {
+          var w = window.open(res.url, '_blank', 'width=500,height=700');
+          if (!w) { toast('Permita popups para este site e tente de novo.'); return; }
+          var poll = setInterval(function () {
+            try { if (w.closed) { clearInterval(poll); checkGoogleSession(); } } catch (e) {}
+          }, 1000);
+        }
+      }).catch(function (e) { toast('Erro ao conectar com Google: ' + e.message); });
+    });
+  }
+
+  function hideOverlays() {
+    var ovs = document.querySelectorAll('.modal-overlay.visible');
+    for (var i = 0; i < ovs.length; i++) ovs[i].classList.remove('visible');
+  }
+
   function checkGoogleSession() {
     if (!TP.client || !TP.client.auth) return;
     TP.client.auth.getSession().then(function (res) {
       var s = res.data && res.data.session;
-      if (s && s.user) {
-        TP.uid = s.user.id;
-        TP.token = s.access_token;
-        TP.name = s.user.user_metadata && s.user.user_metadata.full_name || s.user.email || 'Usuário';
-        try { localStorage.setItem(TP.nameKey, TP.name); } catch (e) {}
-        tpDebug('Google login OK: ' + TP.name + ' uid=' + TP.uid);
-        var meta = tpMeta();
-        if (TP.db) {
-          TP.db.from('users').upsert({
-            id: TP.uid, name: TP.name, admin: false,
-            device_id: TP.deviceId || '', ua: meta.ua,
-            screen: meta.screen, ram: meta.ram
-          }, { onConflict: 'id' }).then(function () {
-            tpRegisterAccount().then(function () { tpLoadCredits(); });
-          }).catch(function () { tpRegisterAccount().then(function () { tpLoadCredits(); }); });
+      if (!s || !s.user) { toast('Login não concluído. Tente de novo.'); return; }
+      TP.uid = s.user.id;
+      TP.token = s.access_token;
+      TP.email = s.user.email || '';
+      TP.name = (s.user.user_metadata && s.user.user_metadata.full_name) || s.user.email || 'Usuário';
+      tpDebug('Google login OK: ' + TP.email + ' uid=' + TP.uid);
+      tpRecord('sessions', { action: 'open' });
+      tpStartHeartbeat();
+      hideOverlays();
+      tpAfterAuth();
+    }).catch(function () { toast('Erro ao verificar login. Tente de novo.'); });
+  }
+
+  function tpAfterAuth() {
+    if (!TP.uid) { tpShowLogin(); return; }
+    var meta = tpMeta();
+    var email = TP.email || '';
+    TP.db.from('users').upsert({
+      id: TP.uid,
+      name: TP.name || email.split('@')[0] || 'Usuário',
+      admin: false,
+      email: email || null,
+      email_verified: email ? true : false,
+      device_id: TP.deviceId || '', ua: meta.ua,
+      screen: meta.screen, ram: meta.ram
+    }, { onConflict: 'id' }).then(function () {
+      TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
+      TP.queue = [];
+      tpChatInit();
+      tpRegisterAccount().then(function () { tpLoadCredits(); tpEnsureUsername(); });
+    }).catch(function () { tpRegisterAccount().then(function () { tpLoadCredits(); tpEnsureUsername(); }); });
+  }
+
+  function tpEnsureUsername() {
+    if (TP.username) { tpUpdateCreditDisplay(); return; }
+    var cached = localStorage.getItem(TP.nameKey);
+    if (cached) { TP.username = cached; TP.name = cached; tpUpdateCreditDisplay(); return; }
+    tpBackendAuth('/api/auth/me').then(function (res) {
+      if (res && res.ok) {
+        TP.username = (res.user && res.user.username) || null;
+        if (TP.username) {
+          TP.name = TP.username;
+          try { localStorage.setItem(TP.nameKey, TP.username); } catch (e) {}
+          tpUpdateCreditDisplay();
+        } else {
+          tpShowUsernameModal();
         }
+      } else {
+        tpShowUsernameModal();
       }
-    }).catch(function () {});
+    }).catch(function () { tpShowUsernameModal(); });
   }
 
   function tpAutoInit() {
     tpEnsureDeviceId();
-    TP.name = localStorage.getItem(TP.nameKey) || null;
-    if (TP.name) { tpLogin(); tpRecord('sessions', { action: 'open' }); tpStartHeartbeat(); return; }
+    TP.username = localStorage.getItem(TP.nameKey) || null;
+    if (TP.username) TP.name = TP.username;
     tpLoadFirebase().then(function () {
       if (TP.client && TP.client.auth) {
         TP.client.auth.getSession().then(function (res) {
           var s = res.data && res.data.session;
-          if (s && s.user) {
+          if (s && s.user && s.user.email) {
             TP.uid = s.user.id;
             TP.token = s.access_token;
-            TP.name = s.user.user_metadata && s.user.user_metadata.full_name || s.user.email || 'Usuário';
-            try { localStorage.setItem(TP.nameKey, TP.name); } catch (e) {}
-            tpDebug('Google login restaurado: ' + TP.name + ' uid=' + TP.uid);
+            TP.email = s.user.email || '';
+            TP.name = TP.username || (s.user.user_metadata && s.user.user_metadata.full_name) || s.user.email || 'Usuário';
+            tpDebug('Sessão restaurada: ' + TP.email + ' uid=' + TP.uid);
             tpRecord('sessions', { action: 'open' });
             tpStartHeartbeat();
-            tpRegisterAccount().then(function () { tpLoadCredits(); });
+            tpAfterAuth();
             return;
           }
-          tpShowNameModal();
-        }).catch(function () { tpShowNameModal(); });
+          if (s && s.user && !s.user.email) {
+            try { TP.client.auth.signOut(); } catch (e) {}
+          }
+          tpShowLogin();
+        }).catch(function () { tpShowLogin(); });
       } else {
-        tpShowNameModal();
+        tpShowLogin();
       }
-    }).catch(function () { tpShowNameModal(); });
+    }).catch(function () { tpShowLogin(); });
   }
 
   function tpStartHeartbeat() {
@@ -1918,109 +1981,65 @@ body { min-height: 100dvh; }
     }, 60000);
   }
 
-  function tpLogin() {
-    if (!TP.name) return;
-    tpLoadFirebase().then(function () {
-      if (!TP.ready) { tpDebug('Falha ao carregar Supabase SDK'); return; }
-      try {
-        TP.client.auth.getSession().then(function (sessionRes) {
-          var existingSession = sessionRes.data && sessionRes.data.session;
-          if (existingSession && existingSession.user && existingSession.access_token) {
-            TP.uid = existingSession.user.id;
-            TP.token = existingSession.access_token;
-            tpDebug('Sessão restaurada uid=' + TP.uid + ' token=sim');
-            var meta = tpMeta();
-            TP.db.from('users').upsert({
-              id: TP.uid, name: TP.name, admin: false,
-              device_id: TP.deviceId || '', ua: meta.ua,
-              screen: meta.screen, ram: meta.ram
-            }, { onConflict: 'id' }).then(function () {
-              TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
-              TP.queue = [];
-              tpChatInit();
-              tpRegisterAccount().then(function () { tpLoadCredits(); });
-            }).catch(function () { tpRegisterAccount().then(function () { tpLoadCredits(); }); });
-            return;
-          }
-          TP.client.auth.signInAnonymously().then(function (res) {
-            var user = res.data && res.data.user ? res.data.user : res.user;
-            var session = res.data && res.data.session ? res.data.session : res.session;
-            TP.uid = user ? user.id : null;
-            TP.token = session ? session.access_token : null;
-            tpDebug('Login OK uid=' + TP.uid + ' token=' + (TP.token ? 'sim' : 'NAO'));
-            var meta = tpMeta();
-            TP.db.from('users').upsert({
-              id: TP.uid, name: TP.name, admin: false,
-              device_id: TP.deviceId || '', ua: meta.ua,
-              screen: meta.screen, ram: meta.ram
-            }, { onConflict: 'id' }).then(function () {
-              TP.queue.slice().forEach(function (q) { tpRecord(q.c, q.d); });
-              TP.queue = [];
-              tpChatInit();
-              if (!TP.token && TP.client && TP.client.auth) {
-                TP.client.auth.getSession().then(function (sRes) {
-                  var s = sRes.data && sRes.data.session ? sRes.data.session : (sRes.session || null);
-                  if (s && s.access_token) { TP.token = s.access_token; tpDebug('Token obtido via getSession'); }
-                  tpRegisterAccount().then(function () { tpLoadCredits(); });
-                });
-              } else {
-                tpRegisterAccount().then(function () { tpLoadCredits(); });
-              }
-            }).catch(function (err) {
-              tpDebug('Falha ao salvar: ' + (err && err.message ? err.message : err));
-            });
-          }).catch(function (err) {
-            tpDebug('Falha no login: ' + (err && err.message ? err.message : JSON.stringify(err)));
-          });
-        });
-      } catch (e) { tpDebug('Erro: ' + e.message); }
-    }).catch(function (e) { tpDebug('Erro SDK: ' + (e && e.message)); });
+  function tpShowLogin() {
+    var m = $('login-modal');
+    if (!m) return;
+    hideOverlays();
+    var btn = $('btn-login-google');
+    if (btn) btn.onclick = beginGoogleAuth;
+    m.classList.add('visible');
+    tpUpdateCreditDisplay();
   }
 
-  function tpShowNameModal() {
-    var m = $('name-modal');
-    var input = $('name-input');
-    var btn = $('name-submit');
-    var errEl = $('name-error');
+  function tpShowUsernameModal() {
+    var m = $('username-modal');
+    if (!m) return;
+    var input = $('username-input');
+    var btn = $('username-submit');
+    var errEl = $('username-error');
+    hideOverlays();
+    function sanitize(v) {
+      return String(v || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+    }
     function submit() {
-      var raw = input.value || '';
-      var err = tpValidateName(raw);
-      if (err) { if (errEl) errEl.textContent = err; input.focus(); return; }
+      var uname = sanitize(input.value);
+      if (uname.length < 3 || uname.length > 20) {
+        if (errEl) errEl.textContent = 'Use 3 a 20 caracteres: letras, números ou _.';
+        input.focus();
+        return;
+      }
       if (errEl) errEl.textContent = '';
-      var v = tpNormalizeName(raw);
-      TP.name = v;
-      try { localStorage.setItem(TP.nameKey, v); } catch (e) {}
-      m.classList.remove('visible');
-      tpLogin();
-      tpRecord('sessions', { action: 'open' });
-      tpStartHeartbeat();
+      btn.disabled = true;
+      btn.textContent = 'Verificando...';
+      tpBackendAuth('/api/auth/username', 'POST', { username: uname }).then(function (res) {
+        if (res && res.ok) {
+          TP.username = res.username;
+          TP.name = res.username;
+          try { localStorage.setItem(TP.nameKey, res.username); } catch (e) {}
+          m.classList.remove('visible');
+          tpUpdateCreditDisplay();
+          tpLoadCredits();
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Continuar';
+          if (errEl) errEl.textContent = (res && res.error) || 'Esse username já está em uso. Tente outro.';
+          input.focus();
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Continuar';
+        if (errEl) errEl.textContent = 'Erro de conexão. Tente de novo.';
+      });
     }
     input.value = '';
     if (errEl) errEl.textContent = '';
+    input.addEventListener('input', function () {
+      var caret = input.selectionStart;
+      var v = sanitize(input.value);
+      if (input.value !== v) { input.value = v; try { input.setSelectionRange(caret, caret); } catch (e) {} }
+    });
     btn.onclick = submit;
-    input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
-    var googleBtn = $('btn-google-login');
-    if (googleBtn) {
-      googleBtn.onclick = function () {
-        tpLoadFirebase().then(function () {
-          if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
-          TP.client.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-              redirectTo: window.location.origin + window.location.pathname,
-              skipBrowserRedirect: true
-            }
-          }).then(function (res) {
-            if (res && res.url) {
-              var w = window.open(res.url, '_blank', 'width=500,height=700');
-              var poll = setInterval(function () {
-                try { if (!w || w.closed) { clearInterval(poll); checkGoogleSession(); } } catch (e) {}
-              }, 1000);
-            }
-          }).catch(function (e) { toast('Erro ao conectar com Google: ' + e.message); });
-        });
-      };
-    }
+    input.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
     m.classList.add('visible');
     setTimeout(function () { input.focus(); }, 60);
   }
@@ -2115,28 +2134,6 @@ body { min-height: 100dvh; }
     $('support-error').textContent = '';
   });
   $('btn-buy-home').addEventListener('click', openPayModal);
-  var googleUpgradeBtn = $('btn-google-upgrade');
-  if (googleUpgradeBtn) {
-    googleUpgradeBtn.addEventListener('click', function () {
-      tpLoadFirebase().then(function () {
-        if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
-        TP.client.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin + window.location.pathname,
-            skipBrowserRedirect: true
-          }
-        }).then(function (res) {
-          if (res && res.url) {
-            var w = window.open(res.url, '_blank', 'width=500,height=700');
-            var poll = setInterval(function () {
-              try { if (!w || w.closed) { clearInterval(poll); checkGoogleSession(); } } catch (e) {}
-            }, 1000);
-          }
-        }).catch(function (e) { toast('Erro ao conectar com Google: ' + e.message); });
-      });
-    });
-  }
   $('support-close').addEventListener('click', function () { $('support-modal').classList.remove('visible'); });
   $('support-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
   $('support-send').addEventListener('click', function () {
