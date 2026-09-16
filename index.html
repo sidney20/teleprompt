@@ -1887,21 +1887,30 @@ body { min-height: 100dvh; }
     for (var i = 0; i < ovs.length; i++) ovs[i].classList.remove('visible');
   }
 
-  function checkGoogleSession() {
-    if (!TP.client || !TP.client.auth) return;
+  function checkGoogleSession(retries) {
+    if (!TP.client || !TP.client.auth) { toast('Erro ao carregar Supabase.'); return; }
     TP.client.auth.getSession().then(function (res) {
       var s = res.data && res.data.session;
-      if (!s || !s.user) { toast('Login não concluído. Tente de novo.'); return; }
-      TP.uid = s.user.id;
-      TP.token = s.access_token;
-      TP.email = s.user.email || '';
-      TP.name = (s.user.user_metadata && s.user.user_metadata.full_name) || s.user.email || 'Usuário';
-      tpDebug('Google login OK: ' + TP.email + ' uid=' + TP.uid);
-      tpRecord('sessions', { action: 'open' });
-      tpStartHeartbeat();
-      hideOverlays();
-      tpAfterAuth();
-    }).catch(function () { toast('Erro ao verificar login. Tente de novo.'); });
+      if (s && s.user && s.user.email) {
+        TP.uid = s.user.id;
+        TP.token = s.access_token;
+        TP.email = s.user.email || '';
+        TP.name = (s.user.user_metadata && s.user.user_metadata.full_name) || s.user.email || 'Usuário';
+        tpDebug('Google login OK: ' + TP.email + ' uid=' + TP.uid);
+        tpRecord('sessions', { action: 'open' });
+        tpStartHeartbeat();
+        hideOverlays();
+        tpAfterAuth();
+      } else {
+        var n = retries || 0;
+        if (n < 6) { setTimeout(function () { checkGoogleSession(n + 1); }, 700); }
+        else toast('Login não concluído. Tente de novo.');
+      }
+    }).catch(function () {
+      var n = retries || 0;
+      if (n < 6) { setTimeout(function () { checkGoogleSession(n + 1); }, 700); }
+      else toast('Erro ao verificar login. Tente de novo.');
+    });
   }
 
   function tpAfterAuth() {
@@ -1998,6 +2007,8 @@ body { min-height: 100dvh; }
     var btn = $('username-submit');
     var errEl = $('username-error');
     hideOverlays();
+    btn.disabled = false;
+    btn.textContent = 'Continuar';
     function sanitize(v) {
       return String(v || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
     }
@@ -2033,11 +2044,13 @@ body { min-height: 100dvh; }
     }
     input.value = '';
     if (errEl) errEl.textContent = '';
-    input.addEventListener('input', function () {
-      var caret = input.selectionStart;
-      var v = sanitize(input.value);
-      if (input.value !== v) { input.value = v; try { input.setSelectionRange(caret, caret); } catch (e) {} }
-    });
+    if (!input.dataset.sanitizeBound) {
+      input.dataset.sanitizeBound = '1';
+      input.addEventListener('input', function () {
+        var caret = input.selectionStart, v = sanitize(input.value);
+        if (input.value !== v) { input.value = v; try { input.setSelectionRange(caret, caret); } catch (e) {} }
+      });
+    }
     btn.onclick = submit;
     input.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
     m.classList.add('visible');
