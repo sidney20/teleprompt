@@ -70,6 +70,8 @@
     return paras;
   }
 
+  var SKIP_RE = /^#|^\+18|Aposte com Responsabilidade|Minist[êe]ria da Fazenda|Aposta n[ãa]o [ée] Investimento|^Publicidade|^A legenda [ée] o t[íi]tulo|^Instru[çc][õo]es\b|^Obs\b|^N[ãa]O coloque|^Pron[úu]ncia\b|^Card\b|^Foto\b|^Cr[ée]ditos?\b|^Fonte\b|^Legenda do post|^Introdu[çc][ãa]o\b|^Solte o v[íi]deo\b|^Reaja ao v[íi]deo|^Passo a passo|^\d+\.\s*Aperte|^\d+\.\s*Tire|^\d+\.\s*Vai at[ée]|^\d+\.\s*Aperte em c[âa]mera|^\d+\.\s*Ap[óo]s|^\d+\.\s*Terminou|^\d+\.\s*Assim que|^O arquivo do v[íi]deo|^Voc[êe] vai baixar|^Use a legenda|^Exemplo de como|^A PARTIR DAQUI|^Roteiros Fofoca|^Do \d+ ao \d+|^COMO FAZER|^1\.\s*Voc[êe]|^2\.\s*V[áa] na|^3\.\s*Comece|^4\.\s*Ap[óo]s|^Ressaltando|^Ou seja,|^Ou seja:|^PRON[ÚU]NCIA|^PRONUNCIA|^Roteiro\s*[:.]/i;
+
   function postProcess(script) {
     var title = script.fullTitle;
     var displayTitle = script.displayTitle || title;
@@ -80,7 +82,7 @@
     for (var i = 0; i < lines.length; i++) {
       var t = lines[i].trim();
       if (labelIdx === -1 && /^Roteiro\s*[:.]\s*/i.test(t)) labelIdx = i;
-      if (instIdx === -1 && /^Instru\u00e7\u00f5es\s*[:.]?/i.test(t)) instIdx = i;
+      if (instIdx === -1 && /^Instru[çc][õo]es\s*[:.]?/i.test(t)) instIdx = i;
     }
 
     var instructions = [];
@@ -101,14 +103,14 @@
           continue;
         }
         if (isLegenda) { legendaMode = true; instructions.push(raw); continue; }
-        if (legendaMode || isCredit) { instructions.push(raw); continue; }
+        if (legendaMode || isCredit || SKIP_RE.test(tt)) { instructions.push(raw); continue; }
         reading.push(raw);
         continue;
       }
 
       if (instIdx >= 0 && j <= instIdx) { instructions.push(raw); continue; }
       if (isLegenda) { legendaMode = true; instructions.push(raw); continue; }
-      if (legendaMode || isCredit) { instructions.push(raw); continue; }
+      if (legendaMode || isCredit || SKIP_RE.test(tt)) { instructions.push(raw); continue; }
       reading.push(raw);
     }
 
