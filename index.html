@@ -22,12 +22,12 @@ html, body {
   overscroll-behavior: none;
 }
 
-body { min-height: 100dvh; }
+body { min-height: 100dvh; overflow: hidden; }
 
-#app { max-width: 520px; margin: 0 auto; min-height: 100dvh; position: relative; }
+  #app { max-width: 520px; margin: 0 auto; min-height: 100dvh; position: relative; overflow: hidden; }
 
-.screen { display: none; min-height: 100dvh; }
-.screen.active { display: block; animation: fadeIn .25s ease; }
+  .screen { display: none; min-height: 100dvh; overflow: hidden; }
+  .screen.active { display: flex; flex-direction: column; animation: fadeIn .25s ease; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------- HOME ---------- */
@@ -91,7 +91,8 @@ body { min-height: 100dvh; }
   background: none; border: none; color: #a5b4fc; font-size: .8rem; cursor: pointer; text-decoration: underline;
 }
 
-.saved-docs { margin-top: 22px; }
+.saved-docs { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; padding-bottom: 80px; }
+.saved-docs::-webkit-scrollbar { display: none; }
 .saved-docs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .saved-docs-head h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; color: #9ca3af; font-weight: 600; margin: 0; }
 .saved-docs-head .clear-all { background: none; border: 1px solid rgba(248,113,113,.35); color: #f87171; font-size: .72rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
@@ -1525,6 +1526,7 @@ body { min-height: 100dvh; }
 
       saveDoc(urlRaw.trim(), scripts.length, scripts);
       setStatus('&#9989; ' + scripts.length + ' roteiro(s) separados com sucesso.', 'ok');
+      homeLink.value = '';
       openScripts(state.doc);
     } catch (err) {
       setStatus('&#9888; ' + err.message, 'err');
@@ -3364,6 +3366,9 @@ $('speed-range').addEventListener('input', function () {
   btnLoad.addEventListener('click', function () {
     var v = homeLink.value.trim();
     if (!v) { toast('Cole o link do Google Docs primeiro'); return; }
+    var docs = getSavedDocs();
+    var isDuplicate = docs.some(function (d) { return d.url && d.url.trim() === v; });
+    if (isDuplicate) { toast('Esse link já está disponível na lista.'); return; }
     loadDoc(v);
   });
 
