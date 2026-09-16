@@ -2,7 +2,6 @@
   var NUM_RE = /^\s*(\d{1,3})\s*([.\-\u2013\u2014)])\s*(.+)$/;
   var SEP_RE = /^[\s_\-\u2014\u2013]{4,}$/;
   var NOTE_RE = /^[\u00bb\u00ab<>].{4,}/;
-  var STEP_RE = /^\d+\.\s+[a-záàãâéêíóôõúç]/i;
 
   function parseScripts(text) {
     var normalized = String(text).replace(/\r\n/g, '\n');
@@ -11,6 +10,7 @@
     var scripts = [];
     var idx = -1;
     var pendingNote = null;
+    var afterSep = true;
 
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
@@ -18,8 +18,7 @@
         if (idx >= 0) scripts[idx].lines.push('');
         continue;
       }
-      if (SEP_RE.test(line)) continue;
-      if (STEP_RE.test(line)) continue;
+      if (SEP_RE.test(line)) { afterSep = true; continue; }
       if (NOTE_RE.test(line)) {
         pendingNote = pendingNote ? pendingNote + '\n' + line : line;
         continue;
@@ -27,7 +26,7 @@
 
       var m = line.match(NUM_RE);
       var lastNum = idx >= 0 ? scripts[idx].num : -1;
-      if (m && (idx === -1 || m[1] > lastNum)) {
+      if (m && (idx === -1 || m[1] > lastNum) && afterSep) {
         idx++;
         scripts.push({
           num: parseInt(m[1], 10),
@@ -37,6 +36,7 @@
           lines: []
         });
         pendingNote = null;
+        afterSep = false;
         continue;
       }
 
@@ -44,6 +44,7 @@
         idx++;
         scripts.push({ num: null, fullTitle: line, displayTitle: line, note: pendingNote, lines: [] });
         pendingNote = null;
+        afterSep = false;
         continue;
       }
 
