@@ -3368,7 +3368,7 @@ $('speed-range').addEventListener('input', function () {
     if (!v) { toast('Cole o link do Google Docs primeiro'); return; }
     var docs = getSavedDocs();
     var isDuplicate = docs.some(function (d) { return d.url && d.url.trim() === v; });
-    if (isDuplicate) { toast('Esse link já está disponível na lista.'); return; }
+    if (isDuplicate) { homeLink.value = ''; toast('Esse link já está disponível na lista.'); return; }
     loadDoc(v);
   });
 
