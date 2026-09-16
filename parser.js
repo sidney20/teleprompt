@@ -1,5 +1,5 @@
 (function (global) {
-  var NUM_RE = /^\s*(\d{1,3})\s*([.\-\u2013\u2014)])\s*(.+)$/;
+  var NUM_RE = /^\s*(\d{1,3})\s*([.\-\u2013\u2014)\s])\s*(.+)$/;
   var SEP_RE = /^[\s_\-\u2014\u2013]{4,}$/;
   var NOTE_RE = /^[\u00bb\u00ab<>].{4,}/;
 
