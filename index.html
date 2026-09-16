@@ -3242,7 +3242,7 @@ $('speed-range').addEventListener('input', function () {
   initBeautyUI();
 
   window.addEventListener('beforeunload', function () {
-    if (state.recording) stopRecording();
+    if (state.recording && state.recorder && state.recorder.state !== 'inactive') stopRecording();
     stopCamera();
   });
 })();
