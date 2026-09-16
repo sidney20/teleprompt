@@ -1925,28 +1925,47 @@ body { min-height: 100dvh; }
     TP.username = localStorage.getItem(TP.nameKey) || null;
     if (TP.username) TP.name = TP.username;
     tpLoadFirebase().then(function () {
-      if (TP.client && TP.client.auth) {
+      if (!TP.client || !TP.client.auth) { tpShowLogin(); return; }
+      var sessionHandled = false;
+      TP.client.auth.onAuthStateChange(function (event, session) {
+        if (sessionHandled) return;
+        if (session && session.access_token) {
+          sessionHandled = true;
+          TP.uid = session.user.id;
+          TP.token = session.access_token;
+          TP.email = session.user.email || '';
+          TP.name = TP.username || (session.user.user_metadata && session.user.user_metadata.full_name) || session.user.email || 'Usuário';
+          tpDebug('Auth event=' + event + ' email=' + TP.email);
+          tpRecord('sessions', { action: 'open' });
+          tpStartHeartbeat();
+          tpAfterAuth();
+          return;
+        }
+        if (event === 'SIGNED_OUT' || (!session && !sessionHandled)) {
+          if (!sessionHandled) { sessionHandled = true; tpShowLogin(); }
+        }
+      });
+      // Fallback: if onAuthStateChange doesn't fire within 2s, try getSession
+      setTimeout(function () {
+        if (sessionHandled) return;
         TP.client.auth.getSession().then(function (res) {
+          if (sessionHandled) return;
+          sessionHandled = true;
           var s = res.data && res.data.session;
           if (s && s.user && s.user.email) {
             TP.uid = s.user.id;
             TP.token = s.access_token;
             TP.email = s.user.email || '';
             TP.name = TP.username || (s.user.user_metadata && s.user.user_metadata.full_name) || s.user.email || 'Usuário';
-            tpDebug('Sessão restaurada: ' + TP.email + ' uid=' + TP.uid);
+            tpDebug('Session fallback OK: ' + TP.email);
             tpRecord('sessions', { action: 'open' });
             tpStartHeartbeat();
             tpAfterAuth();
-            return;
+          } else {
+            tpShowLogin();
           }
-          if (s && s.user && !s.user.email) {
-            try { TP.client.auth.signOut(); } catch (e) {}
-          }
-          tpShowLogin();
-        }).catch(function () { tpShowLogin(); });
-      } else {
-        tpShowLogin();
-      }
+        }).catch(function () { if (!sessionHandled) { sessionHandled = true; tpShowLogin(); } });
+      }, 2000);
     }).catch(function () { tpShowLogin(); });
   }
 
