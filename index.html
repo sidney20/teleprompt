@@ -1701,6 +1701,8 @@ body { min-height: 100dvh; overflow: hidden; }
     queue: [],
     credits: null,
     plan: null,
+    planActive: false,
+    planExpiresAt: null,
     cfg: {
       url: 'https://winbijssaawvmtmbluix.supabase.co',
       anonKey: 'sb_publishable_Y8WYTANqEOQ5u2x4WXytGQ_1DQ03PLW'
@@ -1849,6 +1851,7 @@ body { min-height: 100dvh; overflow: hidden; }
 
   function tpHasCredits() {
     if (tpIsOwner()) return true;
+    if (TP.planActive) return true;
     return TP.credits && TP.credits.total > 0;
   }
 
@@ -1857,6 +1860,11 @@ body { min-height: 100dvh; overflow: hidden; }
     if (!el) return;
     if (tpIsOwner()) {
       el.innerHTML = '<span class="cr-dot on"></span>Acesso ilimitado';
+      el.className = 'credits-bar owner';
+      return;
+    }
+    if (TP.planActive) {
+      el.innerHTML = '<span class="cr-dot on"></span>Plano ativo';
       el.className = 'credits-bar owner';
       return;
     }
@@ -1879,9 +1887,14 @@ body { min-height: 100dvh; overflow: hidden; }
   function tpLoadCredits() {
     if (tpIsOwner()) { TP.credits = { total: 999, free: 0, paid: 0 }; tpUpdateCreditDisplay(); return; }
     return tpBackendAuth('/api/me/credits').then(function (res) {
-      if (res.ok) { TP.credits = res.credits; TP.plan = res.plan || null; }
+      if (res.ok) {
+        TP.credits = res.credits;
+        TP.plan = res.plan || 'free';
+        TP.planActive = res.plan_active || false;
+        TP.planExpiresAt = res.plan_expires_at || null;
+      }
       tpUpdateCreditDisplay();
-    }).catch(function () { TP.credits = { total: 0, free: 0, paid: 0 }; tpUpdateCreditDisplay(); });
+    }).catch(function () { TP.credits = { total: 0, free: 0, paid: 0 }; TP.planActive = false; tpUpdateCreditDisplay(); });
   }
 
   function tpFetchProducts() {
