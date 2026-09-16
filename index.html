@@ -772,9 +772,43 @@ body { min-height: 100dvh; }
 .chat-input::placeholder { color: rgba(255,255,255,.35); }
 .chat-input:focus { border-color: #8b5cf6; }
 .chat-send-btn { flex-shrink: 0; padding: 12px 20px; }
-.home-actions { display: flex; justify-content: center; margin-top: 16px; }
-.home-support-btn { font-size: .85rem; width: auto; padding: 10px 20px; border-radius: 16px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700; }
-.home-support-btn:active { transform: scale(.96); }
+.btn-pro {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 900;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-size: .82rem;
+  font-weight: 800;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(245,158,11,.35);
+  transition: transform .15s, box-shadow .15s;
+}
+.btn-pro:active { transform: scale(.95); box-shadow: 0 2px 8px rgba(245,158,11,.25); }
+.btn-support-float {
+  position: fixed;
+  bottom: 24px;
+  left: 16px;
+  z-index: 900;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 1.2rem;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(99,102,241,.4);
+  transition: transform .15s, box-shadow .15s;
+}
+.btn-support-float:active { transform: scale(.9); }
 .ctrl-chat-btn { position: relative; width: 36px; height: 36px; font-size: .95rem; }
 .chat-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
 .support-area { width: 100%; min-height: 110px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 12px; color: #fff; font-size: .88rem; outline: none; resize: vertical; font-family: inherit; }
@@ -875,6 +909,9 @@ body { min-height: 100dvh; }
       <button class="install-pill" id="btn-install">&#11015; Instalar app no celular</button>
     </div>
 
+    <!-- PRO button - top right -->
+    <button class="btn-pro" id="btn-pro" title="Comprar créditos">PRO &#128081;</button>
+
     <div class="card">
       <label for="doc-link">Link do Google Docs</label>
       <div class="link-row">
@@ -885,10 +922,8 @@ body { min-height: 100dvh; }
       <div id="credit-display" class="credits-bar loading">Carregando...</div>
     </div>
 
-    <div class="home-actions">
-      <button class="icon-btn home-support-btn" id="btn-support-home" title="Suporte">&#9993; Suporte</button>
-      <button class="icon-btn home-support-btn" id="btn-buy-home" title="Comprar créditos">&#128176; Comprar</button>
-    </div>
+    <!-- Support button - floating bottom left -->
+    <button class="btn-support-float" id="btn-support-home" title="Suporte">&#9993;</button>
 
     <div class="saved-docs" id="saved-docs-wrap" style="display:none">
       <div class="saved-docs-head">
@@ -2131,7 +2166,7 @@ body { min-height: 100dvh; }
     $('support-msg').value = '';
     $('support-error').textContent = '';
   });
-  $('btn-buy-home').addEventListener('click', openPayModal);
+  $('btn-pro').addEventListener('click', openPayModal);
   $('support-close').addEventListener('click', function () { $('support-modal').classList.remove('visible'); });
   $('support-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('visible'); });
   $('support-send').addEventListener('click', function () {
