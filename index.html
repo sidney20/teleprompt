@@ -1144,6 +1144,18 @@ body { min-height: 100dvh; overflow: hidden; }
       </div>
     </div>
 
+    <div class="cfg-block">
+      <div class="cfg-head">&#128190; Salvamento dos v\u00eddeos</div>
+      <div class="seg-block">
+        <div class="seg-label">Onde salvar automaticamente?</div>
+        <div class="seg" id="seg-savemode">
+          <button class="seg-btn" data-val="gallery">Galeria do celular</button>
+          <button class="seg-btn" data-val="picker">Escolher pasta</button>
+        </div>
+        <div style="font-size:.7rem;color:#9ca3af;margin-top:-4px">Defina onde os v\u00eddeos ser\u00e3o salvos quando voc\u00ea tocar em Salvar v\u00eddeo.</div>
+      </div>
+    </div>
+
     <div class="mbtns">
       <button class="mbtn" id="cfg-close">Concluído</button>
     </div>
@@ -1396,7 +1408,8 @@ body { min-height: 100dvh; overflow: hidden; }
     res: '478x850',
     fps: 24,
     countdown: 3,
-    startScrollOnRecord: true
+    startScrollOnRecord: true,
+    saveMode: 'gallery'
   };
 
   function loadSettings() {
@@ -1417,6 +1430,7 @@ body { min-height: 100dvh; overflow: hidden; }
       if (isWeakDevice() && (state.res !== '478x850' || state.fps !== 24)) { state.res = '478x850'; state.fps = 24; }
       if (s.countdown === 0 || s.countdown === 3 || s.countdown === 5 || s.countdown === 10) state.countdown = s.countdown;
       if (typeof s.startScrollOnRecord === 'boolean') state.startScrollOnRecord = s.startScrollOnRecord;
+      if (s.saveMode === 'gallery' || s.saveMode === 'picker') state.saveMode = s.saveMode;
     } catch (e) {}
   }
   function saveSettings() {
@@ -1434,7 +1448,8 @@ body { min-height: 100dvh; overflow: hidden; }
         res: state.res,
         fps: state.fps,
         countdown: state.countdown,
-        startScrollOnRecord: state.startScrollOnRecord
+        startScrollOnRecord: state.startScrollOnRecord,
+        saveMode: state.saveMode
       }));
     } catch (e) {}
   }
@@ -2763,13 +2778,15 @@ $('speed-range').addEventListener('input', function () {
     'seg-res': 'res',
     'seg-fps': 'fps',
     'seg-count': 'countdown',
-    'seg-onset': 'startScrollOnRecord'
+    'seg-onset': 'startScrollOnRecord',
+    'seg-savemode': 'saveMode'
   };
   var SEG_COERCE = {
     res: function (v) { return RES[v] ? v : state.res; },
     fps: function (v) { var n = parseInt(v, 10); n = (n === 24 || n === 30 || n === 60) ? n : state.fps; return safeFpsForRes(n); },
     countdown: function (v) { var n = parseInt(v, 10); return (n === 0 || n === 3 || n === 5 || n === 10) ? n : state.countdown; },
-    startScrollOnRecord: function (v) { return v === 'start' ? true : (v === 'keep' ? false : state.startScrollOnRecord); }
+    startScrollOnRecord: function (v) { return v === 'start' ? true : (v === 'keep' ? false : state.startScrollOnRecord); },
+    saveMode: function (v) { return (v === 'gallery' || v === 'picker') ? v : state.saveMode; }
   };
   var SEG_SER = {
     startScrollOnRecord: function (v) { return v ? 'start' : 'keep'; }
@@ -3303,14 +3320,14 @@ $('speed-range').addEventListener('input', function () {
     var name = 'roteiro-' + num + '.' + ext;
     var mimeType = ext === 'mp4' ? 'video/mp4' : 'video/webm';
 
-    if (window.showSaveFilePicker) {
+    if (state.saveMode === 'picker' && window.showSaveFilePicker) {
       var accept = {};
       accept[mimeType] = ['.' + ext];
       return window.showSaveFilePicker({
         id: 'tp-videos',
         suggestedName: name,
         startIn: 'pictures',
-        types: [{ description: 'Vídeo', accept: accept }]
+        types: [{ description: 'V\u00eddeo', accept: accept }]
       }).then(function (handle) {
         return handle.createWritable().then(function (w) {
           return w.write(blob).then(function () { return w.close(); });
@@ -3340,7 +3357,7 @@ $('speed-range').addEventListener('input', function () {
     fetch(state.lastBlobUrl).then(function (r) { return r.blob(); }).then(function (blob) {
       return autoSaveVideo(blob);
     }).then(function () {
-      toast('Vídeo salvo na galeria!');
+      toast(state.saveMode === 'gallery' ? 'V\u00eddeo salvo na Galeria!' : 'V\u00eddeo salvo!');
       return tpConsumeCredit();
     }).then(function () {
       closeRecModal();
