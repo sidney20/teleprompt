@@ -1,6 +1,6 @@
 (function (global) {
   var NUM_RE = /^\s*(\d{1,3})\s*([.\-\u2013\u2014)\s])\s*(.+)$/;
-  var SEP_RE = /^[\s_\-\u2014\u2013]{4,}$/;
+  var SEP_RE = /^[\s_\-\u2010\u2011\u2012\u2013\u2014\u2015]{4,}$/;
   var NOTE_RE = /^[\u00bb\u00ab<>].{4,}/;
   var STEP_LINE_RE = /^\d+\.\s+(Aperte|Tire|Vai|Ap[óo]s|Terminou|Assim|Comece|Arraste|Clique|Selecione|Digite|Pressione|Abra|Feche|Salve|Copie|Cole|Toque|Segure|Arraste|Solte|Deslize|Gire|Aumente|Reduza)/i;
 
