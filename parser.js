@@ -2,9 +2,10 @@
   var NUM_RE = /^\s*(\d{1,3})\s*([.\-\u2013\u2014)\s])\s*(.+)$/;
   var SEP_RE = /^[\s_\-\u2014\u2013]{4,}$/;
   var NOTE_RE = /^[\u00bb\u00ab<>].{4,}/;
+  var STEP_LINE_RE = /^\d+\.\s+(Aperte|Tire|Vai|Ap[óo]s|Terminou|Assim|Comece|Arraste|Clique|Selecione|Digite|Pressione|Abra|Feche|Salve|Copie|Cole|Toque|Segure|Arraste|Solte|Deslize|Gire|Aumente|Reduza)/i;
 
   function parseScripts(text) {
-    var normalized = String(text).replace(/\r\n/g, '\n');
+    var normalized = String(text).replace(/\r\n/g, '\n').replace(/^\uFEFF/, '');
     var lines = normalized.split('\n').map(function (l) { return l.trim(); });
 
     var scripts = [];
@@ -26,18 +27,36 @@
 
       var m = line.match(NUM_RE);
       var lastNum = idx >= 0 ? scripts[idx].num : -1;
-      if (m && (idx === -1 || m[1] > lastNum) && afterSep) {
-        idx++;
-        scripts.push({
-          num: parseInt(m[1], 10),
-          fullTitle: line,
-          displayTitle: m[3].trim(),
-          note: pendingNote,
-          lines: []
-        });
-        pendingNote = null;
-        afterSep = false;
-        continue;
+      if (m) {
+        var detectedNum = parseInt(m[1], 10);
+        var detectedTitle = m[3].trim();
+        var isStepLine = STEP_LINE_RE.test(detectedTitle);
+        var numValid = detectedNum > lastNum || idx === -1;
+
+        if (numValid && afterSep && !isStepLine) {
+          idx++;
+          scripts.push({
+            num: detectedNum,
+            fullTitle: line,
+            displayTitle: detectedTitle,
+            note: pendingNote,
+            lines: []
+          });
+          pendingNote = null;
+          afterSep = false;
+          if (typeof console !== 'undefined') {
+            console.log('[IMPORT DEBUG] Script detected: #' + detectedNum + ' - "' + detectedTitle.substring(0, 60) + '"');
+          }
+          continue;
+        } else if (numValid && !afterSep && !isStepLine) {
+          if (typeof console !== 'undefined') {
+            console.log('[IMPORT DEBUG] Script SKIPPED (afterSep=false): #' + detectedNum + ' - "' + detectedTitle.substring(0, 60) + '"');
+          }
+        } else if (isStepLine) {
+          if (typeof console !== 'undefined') {
+            console.log('[IMPORT DEBUG] Step line skipped: #' + detectedNum + ' - "' + detectedTitle.substring(0, 40) + '"');
+          }
+        }
       }
 
       if (idx === -1) {
@@ -51,9 +70,38 @@
       scripts[idx].lines.push(line);
     }
 
-    var parsed = scripts.map(postProcess).filter(function (s) {
+    var rawCount = scripts.length;
+    var parsed = scripts.map(function (s, i) {
+      var result = postProcess(s);
+      if (result.reading.join('\n\n').trim().length === 0 && result.instructions.length === 0) {
+        if (typeof console !== 'undefined') {
+          console.log('[IMPORT WARNING] Script #' + (s.num || '?') + ' "' + (s.displayTitle || '').substring(0, 40) + '" - DISCARDED (no reading or instructions)');
+        }
+      }
+      return result;
+    }).filter(function (s) {
       return (s.reading.join('\n\n').trim().length > 0) || (s.instructions.length > 0);
     });
+
+    var validNums = [];
+    parsed.forEach(function (s) { if (s.num !== null) validNums.push(s.num); });
+    validNums.sort(function (a, b) { return a - b; });
+
+    if (typeof console !== 'undefined') {
+      console.log('[IMPORT SUMMARY] Total detected: ' + rawCount + ', Valid after processing: ' + parsed.length);
+      console.log('[IMPORT SUMMARY] Numbers found: ' + validNums.join(','));
+    }
+
+    if (validNums.length > 0) {
+      var gaps = [];
+      var maxNum = Math.max.apply(null, validNums);
+      for (var g = 1; g <= maxNum; g++) {
+        if (validNums.indexOf(g) === -1) gaps.push(g);
+      }
+      if (gaps.length > 0 && typeof console !== 'undefined') {
+        console.log('[IMPORT WARNING] Possible missing scripts: ' + gaps.join(','));
+      }
+    }
 
     return parsed;
   }
