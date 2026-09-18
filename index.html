@@ -1944,10 +1944,13 @@ body { min-height: 100dvh; overflow: hidden; }
   function beginGoogleAuth() {
     tpLoadFirebase().then(function () {
       if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
+      var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
       TP.client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + window.location.pathname
+          redirectTo: isNative
+            ? 'https://teleprompt/callback'
+            : window.location.origin + window.location.pathname
         }
       }).then(function (res) {
         if (res && res.error) toast('Erro ao conectar com Google: ' + res.error.message);
@@ -3314,11 +3317,31 @@ $('speed-range').addEventListener('input', function () {
   });
 
   var processingNext = false;
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onloadend = function () {
+        var result = reader.result || '';
+        resolve(result.indexOf(',') >= 0 ? result.split(',')[1] : result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
   function autoSaveVideo(blob) {
     var ext = state.fileExt || 'webm';
     var num = scriptNum(state.doc[state.idx], state.idx);
     var name = 'roteiro-' + num + '.' + ext;
     var mimeType = ext === 'mp4' ? 'video/mp4' : 'video/webm';
+
+    var isCapacitor = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+
+    if (state.saveMode === 'gallery' && isCapacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.GallerySave) {
+      return blobToBase64(blob).then(function (b64) {
+        return window.Capacitor.Plugins.GallerySave.saveVideo({ data: b64, filename: name, mimeType: mimeType });
+      });
+    }
 
     if (state.saveMode === 'picker' && window.showSaveFilePicker) {
       var accept = {};
@@ -3487,6 +3510,7 @@ $('speed-range').addEventListener('input', function () {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   if (!/^https?:$/.test(location.protocol)) return;
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
 
   navigator.serviceWorker.register('sw.js').then(function (reg) {
     if (!navigator.serviceWorker.controller) return;

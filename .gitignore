@@ -1,1 +1,5 @@
 vendor/mediapipe/dl/
+node_modules/
+www/
+build-debug.ps1
+build-output.txt
