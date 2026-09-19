@@ -1968,17 +1968,44 @@ body { min-height: 100dvh; overflow: hidden; }
     tpLoadFirebase().then(function () {
       if (!TP.client) { toast('Erro ao carregar Supabase'); return; }
       var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      if (isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+        tpGoogleAuthNative();
+        return;
+      }
       TP.client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: isNative
-            ? 'https://teleprompt/callback'
-            : window.location.origin + window.location.pathname
+          redirectTo: window.location.origin + window.location.pathname
         }
       }).then(function (res) {
         if (res && res.error) toast('Erro ao conectar com Google: ' + res.error.message);
       }).catch(function (e) { toast('Erro ao conectar com Google: ' + (e && e.message)); });
     });
+  }
+
+  function tpGoogleAuthNative() {
+    TP.client.auth.signInWithOAuth({
+      provider: 'google',
+      options: { skipBrowserRedirect: true }
+    }).then(function (res) {
+      if (res && res.error) { toast('Erro: ' + res.error.message); return; }
+      var url = res && res.data && res.data.url;
+      if (!url) { toast('Erro ao gerar link de login'); return; }
+      var Browser = window.Capacitor.Plugins.Browser;
+      Browser.open({ url: url });
+      Browser.addListener('browserUrlListener', function (event) {
+        if (!event.url || event.url.indexOf('#access_token') === -1) return;
+        var hash = event.url.split('#')[1] || '';
+        var params = new URLSearchParams(hash);
+        var at = params.get('access_token');
+        var rt = params.get('refresh_token');
+        if (!at || !rt) return;
+        TP.client.auth.setSession({ access_token: at, refresh_token: rt }).then(function () {
+          Browser.close();
+          tpAfterAuth();
+        }).catch(function () {});
+      });
+    }).catch(function (e) { toast('Erro ao conectar com Google: ' + (e && e.message)); });
   }
 
   function hideOverlays() {
