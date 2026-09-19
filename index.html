@@ -1208,6 +1208,18 @@ body { min-height: 100dvh; overflow: hidden; }
   </div>
 </div>
 
+<!-- ============ MODAL ATUALIZAÇÃO APK ============ -->
+<div class="modal-overlay" id="apk-update-modal">
+  <div class="modal">
+    <h2>&#128640; Nova versão disponível</h2>
+    <p class="desc" id="apk-update-desc"></p>
+    <div class="mbtns">
+      <button class="mbtn green" id="btn-apk-update">Baixar atualização</button>
+      <button class="mbtn ghost" id="btn-apk-later">Depois</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL GRAVAÇÃO ============ -->
 <div class="modal-overlay" id="rec-modal">
   <div class="modal">
@@ -1356,6 +1368,8 @@ body { min-height: 100dvh; overflow: hidden; }
 
   var STORE_KEY = 'teleprompt_docs_v1';
   var SETTINGS_KEY = 'teleprompt_settings_v1';
+  var APP_VERSION_CODE = 2;
+  var VERSION_CHECK_URL = 'https://sidney20.github.io/teleprompt/version.json?t=' + Date.now();
 
   var RES = { '478x850': { w: 478, h: 850 }, '720x1280': { w: 720, h: 1280 }, '1080x1920': { w: 1080, h: 1920 } };
   function outDims() { return RES[state.res] || RES['478x850']; }
@@ -3624,6 +3638,35 @@ function showUpdateDialog(reg) {
     }
   });
 }
+
+/* ---------- verificação de versão APK ---------- */
+function checkApkUpdate() {
+  if (!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) return;
+  fetch(VERSION_CHECK_URL).then(function (r) { return r.json(); }).then(function (v) {
+    if (v && v.versionCode && v.versionCode > APP_VERSION_CODE) {
+      var modal = document.getElementById('apk-update-modal');
+      var desc = document.getElementById('apk-update-desc');
+      desc.textContent = 'Versão ' + v.version + ' disponível.' + (v.changelog ? ' ' + v.changelog : '');
+      modal.classList.add('visible');
+      document.getElementById('btn-apk-update').onclick = function () {
+        modal.classList.remove('visible');
+        var url = v.apk_url || 'https://github.com/sidney20/teleprompt/releases/latest';
+        if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+          window.Capacitor.Plugins.Browser.open({ url: url });
+        } else {
+          window.open(url, '_blank');
+        }
+      };
+      document.getElementById('btn-apk-later').onclick = function () {
+        modal.classList.remove('visible');
+      };
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) modal.classList.remove('visible');
+      });
+    }
+  }).catch(function () {});
+}
+setTimeout(checkApkUpdate, 3000);
 </script>
 </body>
 </html>
