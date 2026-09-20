@@ -46,7 +46,10 @@ public class MainActivity extends BridgeActivity {
             "var p=new URLSearchParams(h);" +
             "var at=p.get('access_token');" +
             "var rt=p.get('refresh_token');" +
-            "if(at&&rt&&window._tpBridge)window._tpBridge.setAuth(at,rt);" +
+            "if(at&&rt){" +
+              "localStorage.setItem('_tp_pending_auth',JSON.stringify({at:at,rt:rt}));" +
+              "if(window._tpBridge)window._tpBridge.setAuth(at,rt);" +
+            "}" +
             "})()";
         getBridge().getWebView().post(new Runnable() {
             @Override

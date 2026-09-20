@@ -1999,13 +1999,29 @@ body { min-height: 100dvh; overflow: hidden; }
 
   window._tpBridge = {
     setAuth: function(at, rt) {
-      if (!at || !rt || !TP || !TP.client) return;
-      sessionHandled = false;
-      TP.client.auth.setSession({ access_token: at, refresh_token: rt }).then(function () {
-        tpAfterAuth();
-      }).catch(function (e) { toast('Erro ao entrar: ' + (e && e.message)); });
+      if (!at || !rt) return;
+      localStorage.setItem('_tp_pending_auth', JSON.stringify({at: at, rt: rt}));
+      if (TP && TP.client && TP.client.auth) {
+        sessionHandled = false;
+        TP.client.auth.setSession({ access_token: at, refresh_token: rt }).then(function () {
+          tpAfterAuth();
+        }).catch(function (e) { toast('Erro ao entrar: ' + (e && e.message)); });
+      }
     }
   };
+
+  function tpCheckPendingAuth() {
+    try {
+      var raw = localStorage.getItem('_tp_pending_auth');
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (!data || !data.at || !data.rt) return;
+      localStorage.removeItem('_tp_pending_auth');
+      if (TP && TP.client && TP.client.auth) {
+        TP.client.auth.setSession({ access_token: data.at, refresh_token: data.rt }).catch(function () {});
+      }
+    } catch(e) {}
+  }
 
   function tpGoogleAuthNative() {
     TP.client.auth.signInWithOAuth({
@@ -2069,10 +2085,12 @@ body { min-height: 100dvh; overflow: hidden; }
     if (TP.username) TP.name = TP.username;
     tpLoadFirebase().then(function () {
       if (!TP.client || !TP.client.auth) { tpShowLogin(); return; }
+      tpCheckPendingAuth();
       var sessionHandled = false;
       TP.client.auth.onAuthStateChange(function (event, session) {
         if (sessionHandled) return;
         if (session && session.access_token) {
+          localStorage.removeItem('_tp_pending_auth');
           sessionHandled = true;
           TP.uid = session.user.id;
           TP.token = session.access_token;
