@@ -1997,11 +1997,20 @@ body { min-height: 100dvh; overflow: hidden; }
     });
   }
 
+  window._tpBridge = {
+    setAuth: function(at, rt) {
+      if (!at || !rt || !TP || !TP.client) return;
+      TP.client.auth.setSession({ access_token: at, refresh_token: rt }).then(function () {
+        tpAfterAuth();
+      }).catch(function () {});
+    }
+  };
+
   function tpGoogleAuthNative() {
     TP.client.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: 'https://localhost'
+        redirectTo: 'com.teleprompt.app://auth-callback'
       }
     }).then(function (res) {
       if (res && res.error) toast('Erro ao conectar com Google: ' + res.error.message);
