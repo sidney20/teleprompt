@@ -2000,9 +2000,10 @@ body { min-height: 100dvh; overflow: hidden; }
   window._tpBridge = {
     setAuth: function(at, rt) {
       if (!at || !rt || !TP || !TP.client) return;
+      sessionHandled = false;
       TP.client.auth.setSession({ access_token: at, refresh_token: rt }).then(function () {
         tpAfterAuth();
-      }).catch(function () {});
+      }).catch(function (e) { toast('Erro ao entrar: ' + (e && e.message)); });
     }
   };
 
