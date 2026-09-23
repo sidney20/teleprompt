@@ -3540,8 +3540,10 @@ $('speed-range').addEventListener('input', function () {
   /* ---------- instalar app ---------- */
   function initInstall() {
     var btn = $('btn-install');
+    if (!btn) return;
+    var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
     var installed = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-    if (!btn || installed || navigator.standalone === true) return;
+    if (isNative || installed || navigator.standalone === true) { btn.style.display = 'none'; return; }
 
     var deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', function (e) {
